@@ -1945,3 +1945,22 @@ class RunMixin(DistMixin):
         a5plt.interactive(wallmesh, *args, points=points, data=data,
                           orbit=orbit, log=log, clim=clim,
                           cpos=cpos, cfoc=cfoc, cang=cang, **kwargs)
+
+    def getsimmode(self):
+        """
+        Get the simulation mode in use.
+        (At the time of writing this comment:
+         - 1 Gyro-orbit
+         - 2 Guiding center
+         - 3 Hybrid
+         - 4 Magnetic field lines )
+        """
+        raise NotImplementedError()
+
+    def getsimmode(self):
+        """
+        Returns a dictionary that describes the current plasma species that is simulated, with the following minimum keys:
+        'anum', 'znum', 
+        """
+        raise NotImplementedError()
+        return { 'anum': 3, 'znum': 4 }
