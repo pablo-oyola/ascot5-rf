@@ -1957,10 +1957,28 @@ class RunMixin(DistMixin):
         """
         raise NotImplementedError()
 
-    def getsimmode(self):
+    def getspecies(self):
         """
         Returns a dictionary that describes the current plasma species that is simulated, with the following minimum keys:
-        'anum', 'znum', 
+        'anum', 'znum',
         """
         raise NotImplementedError()
         return { 'anum': 3, 'znum': 4 }
+
+    def getcodeversion(self):
+        """
+        Returns a dictionary that describes the current code version, including at least the following keys (values as strings):
+        'name':         Name of software
+        'description':  Short description of the software (type, purpose)
+        'commit':       Unique commit reference of software
+        'version':      Unique version (tag) of software
+        'repository':   URL of software repository
+        """
+        raise NotImplementedError()
+        return {
+            'name': "ascot5",
+            'description': "monte carlo particle following",
+            'commit': "",
+            'version': "",
+            'repository':"",
+            }
