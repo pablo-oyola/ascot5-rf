@@ -1687,10 +1687,7 @@ class ImportData():
 
         nunit = data["nunit"]
         nbeamletgroup = data["nbeamletgroup"]
-
         injectors = [None] * nunit
-
-
 
         dynamic_variables = data["dynamic_variables"]
         for unit in np.arange(nunit):

@@ -547,8 +547,9 @@ class Ascotpy(LibAscot, LibSimulate, LibProviders):
             out.update(self._eval_bfield(r, phi, z, t, evalaxis=True))
             out["rminor"] = np.sqrt(  ( out["axisr"] - r )**2
                                     + ( out["axisz"] - z )**2 )
-        if any(q in qnt for q in ["er", "ephi", "ez"]):
+        if any(q in qnt for q in ["er", "ephi", "ez", "enorm"]):
             out.update(self._eval_efield(r, phi, z, t))
+            out["enorm"] = np.sqrt(out["er"]**2 + out["ephi"]**2 + out["ez"]**2)
         if any(q in qnt for q in ["n0"]):
             out.update(self._eval_neutral(r, phi, z, t))
         if any(q in qnt for q in ["psi (bzr)", "theta", "zeta", "dpsidr (bzr)",
