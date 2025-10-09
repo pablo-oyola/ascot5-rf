@@ -2339,6 +2339,52 @@ struct_c__SA_mccc_data._fields_ = [
     ('include_gcdiff', ctypes.c_int32),
 ]
 
+class struct_c__SA_diag_energy_exchange_data(Structure):
+    pass
+
+struct_c__SA_diag_energy_exchange_data._pack_ = 1 # source:False
+struct_c__SA_diag_energy_exchange_data._fields_ = [
+    ('S1', ctypes.POINTER(ctypes.c_double)),
+    ('S2', ctypes.POINTER(ctypes.c_double)),
+    ('dEnergy', ctypes.POINTER(ctypes.c_double)),
+    ('is_mode_evol', ctypes.POINTER(ctypes.c_int32)),
+    ('n_modes', ctypes.c_int32),
+    ('nprt', ctypes.c_int32),
+    ('mhd_data', ctypes.POINTER(struct_c__SA_mhd_stat_data)),
+    ('boozerdata', ctypes.POINTER(struct_c__SA_boozer_data)),
+    ('B_data', ctypes.POINTER(struct_c__SA_B_field_data)),
+    ('plasma_data', ctypes.POINTER(struct_c__SA_plasma_data)),
+    ('thrmass', ctypes.c_double),
+    ('enabled', ctypes.c_int32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+]
+
+diag_energy_exchange_data = struct_c__SA_diag_energy_exchange_data
+diag_energy_exchange_init = _libraries['libascot.so'].diag_energy_exchange_init
+diag_energy_exchange_init.restype = None
+diag_energy_exchange_init.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data), ctypes.c_int32, ctypes.POINTER(struct_c__SA_boozer_data), ctypes.POINTER(struct_c__SA_B_field_data), ctypes.POINTER(struct_c__SA_mhd_stat_data), ctypes.POINTER(struct_c__SA_plasma_data)]
+diag_energy_exchange_update_nprt = _libraries['libascot.so'].diag_energy_exchange_update_nprt
+diag_energy_exchange_update_nprt.restype = None
+diag_energy_exchange_update_nprt.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data), ctypes.c_int32]
+diag_energy_exchange_free = _libraries['libascot.so'].diag_energy_exchange_free
+diag_energy_exchange_free.restype = None
+diag_energy_exchange_free.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data)]
+diag_energy_exchange_offload = _libraries['libascot.so'].diag_energy_exchange_offload
+diag_energy_exchange_offload.restype = None
+diag_energy_exchange_offload.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data)]
+diag_energy_exchange_onload = _libraries['libascot.so'].diag_energy_exchange_onload
+diag_energy_exchange_onload.restype = None
+diag_energy_exchange_onload.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data)]
+diag_energy_exchange_update_fo = _libraries['libascot.so'].diag_energy_exchange_update_fo
+diag_energy_exchange_update_fo.restype = None
+diag_energy_exchange_update_fo.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data), ctypes.POINTER(struct_c__SA_particle_simd_fo), ctypes.POINTER(struct_c__SA_particle_simd_fo)]
+diag_energy_exchange_update_gc = _libraries['libascot.so'].diag_energy_exchange_update_gc
+diag_energy_exchange_update_gc.restype = None
+diag_energy_exchange_update_gc.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data), ctypes.POINTER(struct_c__SA_particle_simd_gc), ctypes.POINTER(struct_c__SA_particle_simd_gc)]
+diag_energy_exchange_compact = _libraries['libascot.so'].diag_energy_exchange_compact
+diag_energy_exchange_compact.restype = None
+diag_energy_exchange_compact.argtypes = [ctypes.POINTER(struct_c__SA_diag_energy_exchange_data), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double), ctypes.c_int32]
+
 struct_c__SA_sim_data._pack_ = 1 # source:False
 struct_c__SA_sim_data._fields_ = [
     ('B_data', B_field_data),
@@ -2659,7 +2705,12 @@ __all__ = \
     'asigma_type_loc', 'bbnbi_simulate', 'biosaw_calc_B',
     'boozer_data', 'boozer_eval_psithetazeta', 'boozer_free',
     'boozer_init', 'boozer_offload', 'boschhale_reaction',
-    'boschhale_sigma', 'boschhale_sigmav', 'diag_data', 'diag_free',
+    'boschhale_sigma', 'boschhale_sigmav','diag_data', 'diag_energy_exchange_compact',
+    'diag_energy_exchange_data', 'diag_energy_exchange_free',
+    'diag_energy_exchange_init', 'diag_energy_exchange_offload',
+    'diag_energy_exchange_onload', 'diag_energy_exchange_update_fo',
+    'diag_energy_exchange_update_gc',
+    'diag_energy_exchange_update_nprt', 'diag_data', 'diag_free',
     'diag_init', 'diag_offload', 'diag_onload',
     'diag_orb_check_plane_crossing', 'diag_orb_check_radial_crossing',
     'diag_orb_data', 'diag_orb_free', 'diag_orb_init',
@@ -2773,6 +2824,7 @@ __all__ = \
     'struct_c__SA_plasma_1DS_data', 'struct_c__SA_plasma_1D_data',
     'struct_c__SA_plasma_1Dt_data', 'struct_c__SA_plasma_data',
     'struct_c__SA_sim_data', 'struct_c__SA_wall_2d_data',
+    'struct_c__SA_diag_energy_exchange_data',
     'struct_c__SA_wall_3d_data', 'struct_c__SA_wall_data',
     'struct_diag_transcoef_link', 'union_RF_fields_0',
     'union_c__SA_input_particle_0', 'wall_2d_data',
