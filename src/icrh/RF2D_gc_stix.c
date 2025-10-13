@@ -783,7 +783,7 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
                 real scaling2 = scaling_para * scaling_para;
 
                 // Kick in the magnetic moment.
-                real dmu = M_PI * M_PI * scaling2 * (term1 + term2) * t_inter / (4 * hist[imrk].bnorm[0] * p->mass[imrk]);
+                real dmu = M_PI * scaling2 * (term1 + term2) * t_inter / (4 * hist[imrk].bnorm[0] * p->mass[imrk]);
                 real kpara = stix->ntor[iwave] / hist[imrk].R[0];
                 real drhopara = kpara / (lres * omega_cycl) * dmu;
 
