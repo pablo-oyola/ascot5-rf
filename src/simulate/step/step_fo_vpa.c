@@ -297,7 +297,8 @@ void step_fo_vpa_full(particle_simd_fo* p, real* h, B_field_data* Bdata,
 
             // We add now the perturbation due to the wave fields.
             real Ewave[3], Bwave[3];
-            if(!errflag) {
+            if(!errflag && (rffield_data->type == RF_FULL_ORBIT_2D || 
+                            rffield_data->type == RF_FULL_ORBIT_3D)) {
                 errflag = RF_fields_eval(Ewave, Bwave, posrpz[0], posrpz[1],
                                         posrpz[2], t0 + h[i]/2, rffield_data);
                 Erpz[0] += Ewave[0];

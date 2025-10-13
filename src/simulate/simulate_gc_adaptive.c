@@ -7,6 +7,7 @@
 #include <time.h>
 #include <omp.h>
 #include <math.h>
+#include <string.h>
 #include "../ascot5.h"
 #include "../endcond.h"
 #include "../math.h"
@@ -125,7 +126,7 @@ void simulate_gc_adaptive(particle_queue* pq, sim_data* sim) {
                                      sim->rffield_data.stix.n_max_res);
         }
 
-        nsize4stix = NSIMD * sim->rffield_data.stix.n_max_res * sim->rffield_data.stix.nwaves;
+        nsize4stix = 2 * NSIMD * sim->rffield_data.stix.n_max_res * sim->rffield_data.stix.nwaves;
     }
     
     stix_random = (real*) malloc(nsize4stix * sizeof(real));
@@ -244,7 +245,12 @@ void simulate_gc_adaptive(particle_queue* pq, sim_data* sim) {
                 /* Retrieve marker states in case time step was rejected */
                 if(hnext[i] < 0) {
                     particle_copy_gc(&p0, i, &p, i);
-
+                    if(sim->rffield_data.stix.enabled == 1 && sim->enable_rf){
+                        // We mark all the random values obtained for the
+                        // ICRH for the given particle as useful again,
+                        // to avoid the bias on the stochastic term.
+                        set_rndusage(&sim->rffield_data.stix, used_rnd_icrh, i, 1);
+                    }
                     hin[i] = -hnext[i];
                 }
                 if(p.running[i]){
@@ -326,7 +332,22 @@ void simulate_gc_adaptive(particle_queue* pq, sim_data* sim) {
                 }
             }
         }
+    
+        // We generate new random numbers
+        if(sim->rffield_data.stix.enabled == 1 && sim->enable_rf) {
+            fill_random_values(&sim->random_data, used_rnd_icrh, 
+                                stix_random, nsize4stix);
+        }
     }
+
+    // Releasing the memory allocated for the RF history, if needed.
+    if(sim->rffield_data.stix.enabled == 1 && sim->enable_rf){
+        #pragma omp simd
+        for(int i = 1; i < NSIMD; i++) RF_particle_history_free(&hist[i]);
+    }
+
+    free(stix_random);
+    free(used_rnd_icrh);
 
     /* All markers simulated! */
 
