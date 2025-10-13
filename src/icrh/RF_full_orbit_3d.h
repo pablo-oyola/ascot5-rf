@@ -39,18 +39,18 @@ typedef struct RF3D_fields{
 
 a5err RF3D_fields_init_from_file(RF3D_fields* rffield_data, hid_t f, char* qid);
 int RF3D_fields_init( RF3D_fields* rffield_data, real rmin, real rmax, int nr, \
-               real zmin, real zmax, int nz, int nphi, \
-               int ntor, real omega, \
-               real* Er_real, real* Er_imag, real* Ephi_real, \
-               real* Ephi_imag, real* Ez_real, real* Ez_imag, \
-               real* Br_real, real* Br_imag, real* Bphi_real, \
-               real* Bphi_imag, real* Bz_real, real* Bz_imag);
+                      real zmin, real zmax, int nz, int nphi, \
+                      int ntor, real omega, \
+                      real* Er_real, real* Er_imag, real* Ephi_real, \
+                      real* Ephi_imag, real* Ez_real, real* Ez_imag, \
+                      real* Br_real, real* Br_imag, real* Bphi_real, \
+                      real* Bphi_imag, real* Bz_real, real* Bz_imag);
 void RF3D_fields_free(RF3D_fields* rffield_data);
 void RF3D_fields_offload(RF3D_fields* rffield_data);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rffield_data)
 a5err RF3D_field_eval(real E[3], real B[3], real r, real phi,\
                        real z, real t, RF3D_fields* rffield_data);
-DECLARE_TARGET_END
+GPU_DECLARE_TARGET_SIMD_UNIFORM_END
 
 #endif

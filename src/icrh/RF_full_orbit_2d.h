@@ -39,18 +39,18 @@ typedef struct RF2D_fields{
 
 a5err RF2D_fields_init_from_file(RF2D_fields* rffield_data, hid_t f, char* qid);
 a5err RF2D_fields_init( RF2D_fields* rffield_data, real rmin, real rmax, int nr, \
-               real zmin, real zmax, int nz, \
-               int ntor, real omega, \
-               real* Er_real, real* Er_imag, real* Ephi_real, \
-               real* Ephi_imag, real* Ez_real, real* Ez_imag, \
-               real* Br_real, real* Br_imag, real* Bphi_real, \
-               real* Bphi_imag, real* Bz_real, real* Bz_imag);
+                        real zmin, real zmax, int nz, \
+                        int ntor, real omega, \
+                        real* Er_real, real* Er_imag, real* Ephi_real, \
+                        real* Ephi_imag, real* Ez_real, real* Ez_imag, \
+                        real* Br_real, real* Br_imag, real* Bphi_real, \
+                        real* Bphi_imag, real* Bz_real, real* Bz_imag);
 void RF2D_fields_free(RF2D_fields* rffield_data);
 void RF2D_fields_offload(RF2D_fields* rffield_data);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rffield_data)
 a5err RF2D_field_eval(real E[3], real B[3], real r, real phi,\
                        real z, real t, RF2D_fields* rffield_data);
-DECLARE_TARGET_END
+GPU_DECLARE_TARGET_SIMD_UNIFORM_END
 
 #endif

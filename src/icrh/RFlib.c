@@ -61,7 +61,7 @@ void RF_fields_offload(RF_fields* rf){
 a5err RF_fields_eval(real E[3], real B[3], real r, real phi,\
                        real z, real t, RF_fields* rf){
     if(!rf) return 0;
-    
+
     switch(rf->type){
         case RF_FULL_ORBIT_2D:
             return RF2D_field_eval(E, B, r, phi, z, t, &rf->rf2d);

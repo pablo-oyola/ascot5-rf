@@ -83,8 +83,8 @@ a5err RF2D_fields_init_from_file(RF2D_fields* rffield_data, hid_t f, char* qid){
                        fields[6], fields[7], fields[8], fields[9], fields[10], fields[11]);
 
     for(int i = 0; i < 12; i++) {
-            if(fields[i] != NULL) free(fields[i]);
-        }
+        if(fields[i] != NULL) free(fields[i]);
+    }
 
     return err;
 }
@@ -140,7 +140,7 @@ a5err RF2D_fields_init(RF2D_fields* rffield_data, real rmin, real rmax, int nr, 
         if(err) break;
     }
 
-    rffield_data->initialized = 1;
+    if(!err) rffield_data->initialized = 1;
     return err;
 
 }
@@ -193,7 +193,7 @@ void RF2D_fields_offload(RF2D_fields* rffield_data){
 
 
 a5err RF2D_field_eval(real E[3], real B[3], real r, real phi,\
-                    real z, real t, RF2D_fields* rffield_data){
+                      real z, real t, RF2D_fields* rffield_data){
     a5err err = 0; // Error flag
 
     // Interpolation error flag
@@ -234,8 +234,7 @@ a5err RF2D_field_eval(real E[3], real B[3], real r, real phi,\
     if(interperr){
         E[0] = 0.0; E[1] = 0.0; E[2] = 0.0;
         B[0] = 0.0; B[1] = 0.0; B[2] = 0.0;
-        err = error_raise( ERR_INPUT_EVALUATION, __LINE__, EF_RF_FO2D );
-        return err;
+        return 0;
     }
 
     // Computing the actual electric and magnetic waves.

@@ -36,6 +36,6 @@ void RF_fields_offload(RF_fields* rf);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rf)
 a5err RF_fields_eval(real E[3], real B[3], real r, real phi, real z, real t, RF_fields* rf);
-DECLARE_TARGET_END
+GPU_DECLARE_TARGET_SIMD_UNIFORM_END
 
 #endif
