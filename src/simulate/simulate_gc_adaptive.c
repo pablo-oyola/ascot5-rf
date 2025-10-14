@@ -343,7 +343,7 @@ void simulate_gc_adaptive(particle_queue* pq, sim_data* sim) {
     // Releasing the memory allocated for the RF history, if needed.
     if(sim->rffield_data.stix.enabled == 1 && sim->enable_rf){
         #pragma omp simd
-        for(int i = 1; i < NSIMD; i++) RF_particle_history_free(&hist[i]);
+        for(int i = 0; i < NSIMD; i++) RF_particle_history_free(&hist[i]);
     }
 
     free(stix_random);

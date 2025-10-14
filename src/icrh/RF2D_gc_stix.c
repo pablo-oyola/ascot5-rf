@@ -397,6 +397,7 @@ void RF2D_gc_stix_free(RF2D_gc_stix* stix_data){
                 free(stix_data->res_nums[i]);
             }
         }
+        free(stix_data->res_nums);
     }
     stix_data->res_nums = NULL;
     stix_data->nres = NULL;
@@ -758,9 +759,8 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
                 err2 = gsl_sf_bessel_Jn_e(lres, arg, &rJl);
                 err3 = gsl_sf_bessel_Jn_e(lres + 1, arg, &rJp1);
                 if(err1 || err2 || err3){
-                    print_err("RF2D_gc_stix_scatter: Error computing Bessel function J_%d(%f): kperp = %.3e, mu = %.3e, Bnorm = %.2f, mass=%.3e, charge=%.2e.\n", \
-                        lres, arg, kperp, p->mu[imrk], hist[imrk].bnorm[0], p->mass[imrk], p->charge[imrk]);
                     p->err[imrk] = error_raise( ERR_BESSEL_EVALUATION, __LINE__, EF_RF_GC2D );
+                    p->running[imrk] = 0; // Stop the particle.
                     continue;
                 }
                 Jm1 = rJm1.val;
