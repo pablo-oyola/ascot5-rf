@@ -568,6 +568,7 @@ void endcond_parse(int endcond, int* endconds) {
     if(endcond & endcond_hybrid) {endconds[i++] = 10;};
     if(endcond & endcond_neutr)  {endconds[i++] = 11;};
     if(endcond & endcond_ioniz)  {endconds[i++] = 12;};
+    if(endcond & endcond_flr_wall) {endconds[i++] = 13;};
 }
 
 /**
@@ -619,6 +620,9 @@ void endcond_parse2str(int endcond, char* str) {
             break;
         case 12:
             sprintf(str, "Ionization");
+            break;
+        case 13:
+            sprintf(str, "FLR loss particle");
             break;
     }
 }
