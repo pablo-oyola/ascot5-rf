@@ -116,6 +116,7 @@ class LibSimulate():
         self._sim.endcond_min_ekin    = opt["ENDCOND_MIN_ENERGY"]*eV2J
         self._sim.endcond_max_polorb  = 2*np.pi*opt["ENDCOND_MAX_POLOIDALORBS"]
         self._sim.endcond_max_tororb  = 2*np.pi*opt["ENDCOND_MAX_TOROIDALORBS"]
+        self._sim.enable_flr_losses   = opt["ENABLE_FLR_LOSSES"]
 
         # Setting options
         diag = self._sim.diag_data

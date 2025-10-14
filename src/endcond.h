@@ -16,19 +16,19 @@
  * These bit masks are used to mark specific end condition as being active.
  */
 enum ENDCOND_FLAG {
-    endcond_tlim   = 0x1,   /**< Simulation time limit   */
-    endcond_emin   = 0x2,   /**< Minimum energy          */
-    endcond_therm  = 0x4,   /**< Thermalized             */
-    endcond_wall   = 0x8,   /**< Wall collision          */
-    endcond_rhomin = 0x10,  /**< Minimum rho             */
-    endcond_rhomax = 0x20,  /**< Maximum rho             */
-    endcond_polmax = 0x40,  /**< Poloidal limit          */
-    endcond_tormax = 0x80,  /**< Toroidal limit          */
-    endcond_cpumax = 0x100, /**< Wall time exceeded      */
-    endcond_hybrid = 0x200, /**< Hybrid mode condition   */
-    endcond_neutr  = 0x400, /**< Neutralized             */
-    endcond_ioniz  = 0x800  /**< Ionized                 */
-
+    endcond_tlim   = 0x1,     /**< Simulation time limit   */
+    endcond_emin   = 0x2,     /**< Minimum energy          */
+    endcond_therm  = 0x4,     /**< Thermalized             */
+    endcond_wall   = 0x8,     /**< Wall collision          */
+    endcond_rhomin = 0x10,    /**< Minimum rho             */
+    endcond_rhomax = 0x20,    /**< Maximum rho             */
+    endcond_polmax = 0x40,    /**< Poloidal limit          */
+    endcond_tormax = 0x80,    /**< Toroidal limit          */
+    endcond_cpumax = 0x100,   /**< Wall time exceeded      */
+    endcond_hybrid = 0x200,   /**< Hybrid mode condition   */
+    endcond_neutr  = 0x400,   /**< Neutralized             */
+    endcond_ioniz  = 0x800,   /**< Ionized                 */
+    endcond_flr_wall = 0x1000 /**< FLR loss due to wall    */
 };
 
 void endcond_check_gc(particle_simd_gc* p_f, particle_simd_gc* p_i,

@@ -101,6 +101,7 @@ typedef struct {
     int enable_mhd;            /**< Are MHD modes enabled                     */
     int enable_atomic;         /**< Are atomic reactions enabled              */
     int enable_rf;             /**< Is RF enabled                             */
+    int enable_flr_losses;     /**< Are finite Larmor radius losses enabled   */
     int disable_gctransform;   /**< Disables first order velocity terms in
                                     guiding center transformation             */
     int disable_energyccoll;   /**< Disables energy component from Coulomb

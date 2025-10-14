@@ -160,6 +160,10 @@ void simulate(int n_particles, particle_state* p, sim_data* sim) {
             exit(1);
         }
     }
+    if(sim->enable_flr_losses && (sim->sim_mode == simulate_mode_fo)) {
+        print_err("Error: FLR losses is only valid for GC mode.\n");
+        sim->enable_flr_losses = 0; // Disabling it to avoid any issues
+    }
 
     /**************************************************************************/
     /* 2. Meta data (e.g. random number generator) is initialized.            */
@@ -212,7 +216,7 @@ void simulate(int n_particles, particle_state* p, sim_data* sim) {
             /*                                                                */
             /******************************************************************/
             if(pq.n > 0 && (sim->sim_mode == simulate_mode_gc
-                        || sim->sim_mode == simulate_mode_hybrid)) {
+                         || sim->sim_mode == simulate_mode_hybrid)) {
                 if(sim->enable_ada) {
                     OMP_PARALLEL_CPU_ONLY
                     simulate_gc_adaptive(&pq, sim);

@@ -82,6 +82,7 @@ class Opt(DataGroup):
         self._OPT_ENABLE_DIST_RHO5D          = 0
         self._OPT_ENABLE_DIST_RHO6D          = 0
         self._OPT_ENABLE_RF                  = 0
+        self._OPT_ENABLE_FLR_LOSSES         = 0
         self._OPT_DIST_MIN_R                 = 0.1
         self._OPT_DIST_MAX_R                 = 10.0
         self._OPT_DIST_NBIN_R                = 1
@@ -407,6 +408,12 @@ class Opt(DataGroup):
         """Disable guiding center spatial diffusion
         """
         return self._OPT_DISABLE_GCDIFF_CCOLL
+
+    @property
+    def _ENABLE_FLR_LOSSES(self):
+        """Enable finite Larmor radius losses
+        """
+        return self._OPT_ENABLE_FLR_LOSSES
 
     @property
     def _REVERSE_TIME(self):
