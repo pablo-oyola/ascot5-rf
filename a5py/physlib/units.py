@@ -13,6 +13,7 @@ def parseunits(strip=False, **units):
     - Makes sure every argument has expected dimensions.
     - Assigns units if units were not provided but they were expected.
     - Strips units if asked (after checking/assignment).
+    - Skips parsing when an argument value is None (passed through unchanged).
 
     Examples:
 
@@ -43,6 +44,9 @@ def parseunits(strip=False, **units):
         def checkandstrip(val, unit, name, assignedunits):
             """Check units of a given argument and strip if needed.
             """
+            # Safeguard: if value is None, do not attempt to parse/convert
+            if val is None:
+                return None
             dim = unit.dimensions
             try:
                 # Try to get argument units
