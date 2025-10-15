@@ -175,26 +175,13 @@ class RF2D(DataGroup):
             Input data that can be passed to ``write_hdf5`` method of
             a corresponding type.
         """
-        # Does nothing.
-        return {}
-
-    @staticmethod
-    def create_test_fields():
-        """Create test data for the RF fields.
-
-        Returns
-        -------
-        data : dict
-            Input data that can be passed to ``write_hdf5`` method of
-            a corresponding type.
-        """
         rmin = 0.1
         rmax = 10.0
         zmin = -10.0
         zmax = 10.0
         nr = 10
         nz = 10
-        Er = np.ones((nr, nz), dtype=np.complex128)
+        Er = np.zeros((nr, nz), dtype=np.complex128)
         Ez = np.zeros((nr, nz), dtype=np.complex128)
         Ephi = np.zeros((nr, nz), dtype=np.complex128)
         Br = np.zeros((nr, nz), dtype=np.complex128)
@@ -351,19 +338,6 @@ class RF3D(DataGroup):
             Input data that can be passed to ``write_hdf5`` method of
             a corresponding type.
         """
-        # Does nothing.
-        return {}
-
-    @staticmethod
-    def create_test_fields():
-        """Create test data for the RF fields.
-
-        Returns
-        -------
-        data : dict
-            Input data that can be passed to ``write_hdf5`` method of
-            a corresponding type.
-        """
         rmin = 0.1
         rmax = 10.0
         zmin = -10.0
@@ -371,7 +345,7 @@ class RF3D(DataGroup):
         nr = 10
         nz = 10
         nphi = 2
-        Er = np.ones((nr, nz, nphi), dtype=np.complex128)
+        Er = np.zeros((nr, nz, nphi), dtype=np.complex128)
         Ez = np.zeros((nr, nz, nphi), dtype=np.complex128)
         Ephi = np.zeros((nr, nz, nphi), dtype=np.complex128)
         Br = np.zeros((nr, nz, nphi), dtype=np.complex128)
@@ -548,26 +522,13 @@ class RF2D_Stix(DataGroup):
             Input data that can be passed to ``write_hdf5`` method of
             a corresponding type.
         """
-        # Does nothing.
-        return {}
-
-    @staticmethod
-    def create_test_fields():
-        """Create test data for the RF fields.
-
-        Returns
-        -------
-        data : dict
-            Input data that can be passed to ``write_hdf5`` method of
-            a corresponding type.
-        """
         rmin = 0.1
         rmax = 10.0
         zmin = -10.0
         zmax = 10.0
         nr = 10
         nz = 10
-        Eplus_re = np.ones((nr, nz), dtype=np.float64)
+        Eplus_re = np.zeros((nr, nz), dtype=np.float64)
         Eplus_im = np.zeros((nr, nz), dtype=np.float64)
         Eminus_re = np.zeros((nr, nz), dtype=np.float64)
         Eminus_im = np.zeros((nr, nz), dtype=np.float64)
@@ -582,7 +543,7 @@ class RF2D_Stix(DataGroup):
         include_phase_factor = True
 
         return {"rmin": rmin, "rmax": rmax, "zmin": zmin, "zmax": zmax,
-                "nr": nr, "nz": nz, "Eplus_re": Eplus_re, "Eplus_im": Eplus_im,
+                "Eplus_re": Eplus_re, "Eplus_im": Eplus_im,
                 "Eminus_re": Eminus_re, "Eminus_im": Eminus_im, "kperp": kperp,
                 "costheta": costheta, "sintheta": sintheta, "omega": omega,
                 "ntor": ntor, "include_Eminus": include_Eminus,
