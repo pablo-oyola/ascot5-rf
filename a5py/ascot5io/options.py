@@ -918,10 +918,12 @@ class Opt(DataGroup):
 
         for o in defopt.keys():
             if o not in out:
-                if o == 'ENABLE_ENERGY_TRANSFER_DIAG':
-                    out['ENABLE_ENERGY_TRANSFER_DIAG'] = 0
-                else:
-                    raise ValueError("Missing parameter: " + o)
+                # if o == 'ENABLE_ENERGY_TRANSFER_DIAG':
+                #     out['ENABLE_ENERGY_TRANSFER_DIAG'] = 0
+                # else:
+                #     raise ValueError("Missing parameter: " + o)
+                out[o] = defopt[o]
+                print(f"Warning: Missing parameter {o} set to default: {defopt[o]}")
 
         return out
 
