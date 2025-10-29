@@ -397,7 +397,6 @@ class ImportData():
         # Interpolate psi if needed
         if interpolate_psi0:
             self._ascot.input_init(bfield=b2d)
-            print(b2d["psi0"])
             b2d["axisr"], b2d["axisz"], b2d["psi0"] = \
                 self._ascot.input_findpsi0(b2d["psi0"])
             self._ascot.input_free()
@@ -925,6 +924,7 @@ class ImportData():
 
         return ("prt", prt)
     
+    @parseunits(frequency="MHz")
     def import_wavesol(self, fn=None, frequency: float=None, ntor: float=None, 
                        power_scaling: float=1.0, nr: int=100, nz: int=101):
         """
@@ -968,9 +968,8 @@ class ImportData():
         cos_thet_imag = tmp[:, 9].reshape((n_node_rho, n_node_theta), order='F')
 
         # Reading the magnetic axis location.
-        bffielddata = self._ascot.data.bfield.active.read()
-        raxis = bffielddata['axisr']
-        zaxis = bffielddata['axisz']
+        raxis = self._ascot._sim.B_data.B2DS.axis_r
+        zaxis = self._ascot._sim.B_data.B2DS.axis_z
         xpl += raxis
         ypl += zaxis
 
@@ -1008,8 +1007,6 @@ class ImportData():
             # Removing the NaN values outside the convex hull
             flags = np.isnan(newdata[ikey])
             newdata[ikey][flags] = 0.0
-
-
 
         omega = 2 * np.pi * frequency.to('Hz')
         output = {'rmin': rmin, 'rmax': rmax, 'zmin': zmin, 'zmax': zmax,
@@ -1081,7 +1078,6 @@ class ImportData():
                                             0.0 * unyt.s, 'psi', 'theta', grid=True)
         psi = psi.value.squeeze()
         theta = theta.value.squeeze()
-
         flags = np.logical_not(np.isnan(psi))
 
         # We have now the values of the (psi,thetamag) to transform the fields from
