@@ -275,14 +275,21 @@ class RunMixin(DistMixin):
             "N0_3D.c", "N0_ST.c", "B_3DS.c", "B_2DS.c", "B_STS.c", "B_GS.c",
             "plasma_1D.c", "plasma_1DS.c", "plasma.c", "E_field.c", "neutral.c",
             "E_1DS.c", "B_field.c", "particle.c", "boozer.c", "mhd.c",
-            "atomic.c", "asigma.c", "asigma_loc.c",
+            "atomic.c", "asigma.c", "asigma_loc.c", "suzuki.c", "RF_full_orbit_2d.c",
+            "RF_full_orbit_3d.c", "RF2D_gc_stix.c", "RFlib.c", "RF_stix_particle_history"
         ]
         messages = [
-            "Input evaluation failed", "Unknown input type",
+            "Input evaluation failed", 
+            "Unknown input type",
             "Unphysical quantity when evaluating input",
-            "Unphysical marker quantity", "Time step too small/zero/NaN",
+            "Unphysical marker quantity", 
+            "Time step too small/zero/NaN",
             "Wiener array is full or inconsistent",
-            "Unphysical result when integrating marker coordinates"
+            "Unphysical result when integrating marker coordinates",
+            "Failure when evaluating the atomic data",
+            "Error when evaluating the Bessel functions",
+            "Error when evaluating the Airy functions",
+            "Some value was NaN or infinite",
         ]
 
         emsg = []
