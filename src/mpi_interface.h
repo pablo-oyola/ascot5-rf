@@ -33,4 +33,7 @@ void mpi_gather_particlestate(
 void mpi_gather_diag(diag_data* data, int ntotal, int mpi_rank, int mpi_size,
                      int mpi_root);
 
+void mpi_gather_histogram_by_pieces(void* origin, int am_i_root, 
+                                    size_t nelements);
+
 #endif
