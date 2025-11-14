@@ -23,6 +23,9 @@ dependencies = [
   "unyt",
   "wurlitzer",
   "xmlschema",
+  "xarray",
+  "matplotlib",
+  "lmfit"
 ]
 
 [project.optional-dependencies]

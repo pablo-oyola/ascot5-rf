@@ -4,6 +4,7 @@ import re
 import unyt
 import copy
 import os
+import matplotlib.pyplot as plt
 
 from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import RectBivariateSpline
@@ -14,6 +15,7 @@ from a5py.physlib.units import parseunits
 from a5py.ascot5io.wall import wall_3D
 from a5py.exceptions import *
 import matplotlib.tri as tri
+from ._extend_profiles import extend_profile
 
 try:
     import adas
@@ -1123,4 +1125,162 @@ class ImportData():
         
         return ("RF2D", out)
 
-    
+    @parseunits(time="s")
+    def import_transp_profiles(self, fn: str, time: float, rhopmax: float=1.5,
+                               nrho: int=1024, plot: bool=False,
+                               fitting_region: list=[0.90, 1.05]):
+        """
+        Import the 1D plasma profiles from the TRANSP output file.
+        
+        Usually the plasma profiles in TRANSP are only given up to 
+        rhopol = 1.0, so this script will extract them all and extend 
+        them via fitting to smooth functions.
+
+        Parameters
+        ----------
+        fn : str
+            The TRANSP output file in NetCDF format.
+        time : float
+            The time slice to extract the profiles from [s].
+        rhopmax : float
+            The maximum rhop value to extrapolate the profiles to.
+        nrho : int
+            The number of radial grid points in the output profiles.
+        plot : bool
+            If True, a plot of the profiles is shown.
+        """
+        if xr is None:
+            raise ImportError("xarray package is required to load the TRANSP data")
+        if not os.path.isfile(fn):
+            raise FileNotFoundError(f"File {fn} not found")
+        
+        # Open the TRANSP output file using the xarray package
+        ds = xr.open_datatree(fn)
+
+        # Loading the profiles.
+        plflx = ds['PLFLX'].sel(TIME3=time, method='nearest').values
+        rhop = np.sqrt(plflx / plflx[-1])  # Normalized poloidal flux
+        ne = ds['NE'].sel(TIME3=time, method='nearest').values * unyt.cm**-3
+        te = ds['TE'].sel(TIME3=time, method='nearest').values * unyt.eV
+        ti = ds['TI'].sel(TIME3=time, method='nearest').values * unyt.eV
+        nd = ds['ND'].sel(TIME3=time, method='nearest').values * unyt.cm**-3
+        try:
+            nHe = ds['NHE4'].sel(TIME3=time, method='nearest').values * unyt.cm**-3
+        except KeyError:
+            nHe = np.zeros_like(ne) * unyt.cm**-3
+
+        # Checking which other densities are available:
+        try:
+            nh = ds['NH'].sel(TIME3=time, method='nearest').values * unyt.cm**-3
+        except KeyError:
+            nh = np.zeros_like(ne) * unyt.cm**-3
+
+        try:
+            nimp = ds['NIMP'].sel(TIME3=time, method='nearest').values * unyt.cm**-3
+            # Getting the impurity A and Z values.
+            Aimp = ds['AIMP'].sel(TIME=time, method='nearest').values * unyt.dimensionless
+            Zimp = ds['XZIMP'].sel(TIME=time, method='nearest').values * unyt.dimensionless
+            qimp = ds.ZIMPS_TOK.sel(TIME3=time, method='nearest').values.mean() * unyt.e
+        except KeyError:
+            nimp = np.zeros_like(ne) * unyt.cm**-3
+            Aimp = 12 * unyt.dimensionless  # Carbon
+            Zimp = 6 * unyt.dimensionless
+            qimp = Zimp * unyt.e
+
+        # We need to extend the profiles up to some sensible value of rhop
+        # greater than 1.0
+        profiles = [ne, nd, nh, nimp, nHe]
+        output = []
+        rho_out = np.linspace(0.0, rhopmax, nrho)
+        for i, prof in enumerate(profiles):
+            if np.all(prof.value == 0.0):
+                output.append(np.zeros_like(rho_out) * prof.units)
+                continue
+                
+            iprof_fit = extend_profile(rhop, prof.to('m**-3').value,
+                                       fitting_region=[0.90, 1.05,],
+                                       modelname='tanh',
+                                       smoothing_joint=0.0, mute=True)
+            output.append(iprof_fit.interp(rhopol=rho_out, method='linear').values)
+
+        ne_out, nd_out, nh_out, nimp_out, nHe_out = output
+
+        # We do the same with the temperatures.
+        profiles = [te, ti]
+        output = []
+        for i, prof in enumerate(profiles):
+            iprof_fit = extend_profile(rhop, prof.to('eV').value,
+                                       fitting_region=fitting_region,
+                                       modelname='mtanh_temp',
+                                       smoothing_joint=0, mute=True)
+            output.append(iprof_fit.interp(rhopol=rho_out, method='linear').values)
+        
+        te_out, ti_out = output
+
+        # We now prepare the input for ASCOT.
+        # 1. Counting the effective number of ion species
+        nions = 0
+        profiles = [nd_out, nh_out, nimp_out, nHe_out]
+        masses   = np.array((2, 1, Aimp.value, 4)) * unyt.amu
+        charges  = np.array((1, 1, Zimp.value, 2)) * unyt.e
+        anums    = np.array((2, 1, Aimp.value, 4))
+        znums    = np.array((1, 1, Zimp.value, 2))
+        idensity = []
+        imasses  = []
+        icharges = []
+        ianums   = []
+        iznums   = []
+        for ii, prof in enumerate(profiles):
+            if np.any(prof > 0.0):
+                nions += 1
+                idensity.append(prof)
+                imasses.append(masses[ii])
+                icharges.append(charges[ii])
+                ianums.append(anums[ii])
+                iznums.append(znums[ii])
+        idensity = np.array(idensity).T  * unyt.m**-3# Shape (nrho, nions)
+
+        itemperature = ti_out * unyt.eV
+        etemperature = te_out * unyt.eV
+        edensity     = ne_out * unyt.m**-3
+
+        pls = {"nrho":nrho, "rho":rho_out, "nrho": nrho,
+               "mass":np.array(imasses), "charge":np.array(icharges),
+               "anum":np.array(ianums), "znum":np.array(iznums),
+               "nion":nions,
+               "itemperature":itemperature, "etemperature":etemperature,
+               "idensity":idensity, "edensity":edensity}
+
+        if plot:
+            fig, ax = plt.subplots(ncols=2)
+            ax[0].plot(rho_out, edensity.to('m**-3').value, label='ne')
+            for i in range(nions):
+                ax[0].plot(rho_out, idensity[:,i].to('m**-3').value,
+                           label=f'A = {ianums[i]}, Z = {znums[i]}')
+            ax[0].set_xlabel('$\\rho_\\mathrm{pol}$')
+            ax[0].set_ylabel('Density (m^-3)')
+            ax[0].legend()
+
+            # Plotting the total ion density
+            niontot = np.sum(idensity * znums[np.newaxis,:], axis=1)
+            ax[0].plot(rho_out, niontot.to('m**-3').value, '--', label='nion total')
+
+            # Plotting the reference densities from TRANSP.
+            ax[0].plot(rhop, ne.to('m**-3').value, 'o', label='ne (TRANSP)', markersize=4)
+            if np.any(nd.value > 0.0):
+                ax[0].plot(rhop, nd.to('m**-3').value, 'o', label='nd (TRANSP)', markersize=4)
+            if np.any(nh.value > 0.0):
+                ax[0].plot(rhop, nh.to('m**-3').value, 'o', label='nh (TRANSP)', markersize=4)
+            if np.any(nimp.value > 0.0):
+                ax[0].plot(rhop, nimp.to('m**-3').value, 'o', label='nimp (TRANSP)', markersize=4)
+            if np.any(nHe.value > 0.0):
+                ax[0].plot(rhop, nHe.to('m**-3').value, 'o', label='nHe (TRANSP)', markersize=4)
+
+            ax[1].plot(rho_out, etemperature.to('eV').value, label='Te')
+            ax[1].plot(rho_out, itemperature.to('eV').value, label='Ti')
+            ax[1].set_xlabel(r'$\rho_\mathrm{pol}$')
+            ax[1].set_ylabel('Temperature (eV)')
+            ax[1].legend()
+        
+        return ("plasma_1D", pls)
+
