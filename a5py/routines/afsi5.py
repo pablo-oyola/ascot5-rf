@@ -2,16 +2,24 @@
 studies in fusion devices
 """
 import ctypes
+from typing import List
 import numpy as np
 import unyt
 import numpy.ctypeslib as npctypes
+from pathlib import Path
 
 from a5py.ascot5io.dist import DistData
 from a5py.ascotpy.libascot import _LIBASCOT, STRUCT_HIST, STRUCT_AFSIDATA, \
     PTR_REAL, AFSI_REACTIONS
 from a5py.ascotpy.ascot2py import hist_coordinate__enumvalues
 from a5py.exceptions import AscotNoDataException
+from a5py.physlib.units import parseunits
 from a5py.routines.distmixin import DistMixin
+
+try:
+    import desc
+except ImportError:
+    desc = None
 
 class Afsi():
     """ASCOT Fusion Source Integrator AFSI.
@@ -40,6 +48,172 @@ class Afsi():
 
     def __init__(self, ascot):
         self._ascot = ascot
+
+    @parseunits(rho='dimensionless', phimin='deg', phimax='deg',
+                ekin1='keV', ekin2='keV', pitch1='dimensionless',
+                pitch2='dimensionless', strip=False)
+    def thermal_from_desc(self, reaction, descfn, rho=None, 
+                          phimin=0.0, phimax=360.0*unyt.deg,
+                          nphi: int = 2,
+                          ekin1=None, pitch1=None,
+                          ekin2=None, pitch2=None,
+                          nmc=1000
+                          ) -> List[DistData]:
+        """
+        Calculate thermonuclear fusion between two thermal (Maxwellian)
+        species.
+
+        This variant is used to initialize the AFSI run using the DESC
+        calculation of the volume, which is more accurate and stable than
+        the one implemented in ASCOT.
+
+        @todo: the theta input in DESC is actually different from the one
+        in ASCOT, and some transformations are here required. Right now
+        it just assumes theta = (0, 360) deg.
+        
+        Parameters
+        ----------
+        reaction : int or str
+            Fusion reaction index or name.
+        rho : array_like
+            Abscissa for the radial coordinate in (rho,theta,phi) basis.
+        phimin : float
+            Minimum toroidal angle in degrees.
+        phimax : float
+            Maximum toroidal angle in degrees.
+        ekin1 : array_like
+            Abscissa for the kinetic energy in (E,pitch) basis for the first
+            reaction product.
+        pitch1 : array_like
+            Abscissa for the pitch in (E,pitch) basis for the first reaction
+            product.
+        ekin2 : array_like
+            Abscissa for the kinetic energy in (E,pitch) basis for the second
+            reaction product.
+        pitch2 : array_like
+            Abscissa for the pitch in (E,pitch) basis for the second reaction
+            product.
+        nmc : int, optional
+            Number of MC samples used in each (R, phi, z) bin.
+        Returns
+        -------
+        prod1 : DistData
+            Source distribution of the first fusion product.
+        prod2 : DistData
+            Source distribution of the second fusion product.
+        """
+        # We generate the limits in theta:
+        phi = np.linspace(phimin.to('deg').value, 
+                          phimax.to('deg').value, nphi) * unyt.deg
+        theta = np.linspace(0, 360, 2) * unyt.deg
+        
+        # Getting the masses of the inputs reactants and checking whether
+        # they are present in the plasma input.
+        m1, q1, m2, q2, _, qprod1, _, qprod2, _ = self.reactions(reaction)
+        reactions = {v: k for k, v in AFSI_REACTIONS.items()}
+        reaction = reactions[reaction]
+        anum1 = np.round(m1.to("amu").v)
+        anum2 = np.round(m2.to("amu").v)
+        znum1 = np.round(q1.to("e").v)
+        znum2 = np.round(q2.to("e").v)
+        q1 = np.round(qprod1.to("e").v)
+        q2 = np.round(qprod2.to("e").v)
+
+        nspec, _, _, anums, znums = self._ascot.input_getplasmaspecies()
+        ispecies1, ispecies2 = np.nan, np.nan
+        for i in np.arange(nspec):
+            if( anum1 == anums[i] and znum1 == znums[i] ):
+                ispecies1 = i
+            if( anum2 == anums[i] and znum2 == znums[i] ):
+                ispecies2 = i
+        if np.isnan(ispecies1) or np.isnan(ispecies2):
+            self._ascot.input_free(bfield=True, plasma=True)
+            raise ValueError("Reactant species not present in plasma input.")
+        mult = 0.5 if ispecies1 == ispecies2 else 1.0
+
+        # We initialize the histograms.
+        prod1 = self._init_histogram(
+                    rho.v, theta.to('rad').v, 
+                    phi.to('rad').v, 
+                    ekin1.to('eV').v, 
+                    pitch1.to('dimensionless').v,
+                    charge=q1, exi=True, toroidal=True)
+        prod2 = self._init_histogram(
+                    rho.v, theta.to('rad').v, 
+                    phi.to('rad').v, 
+                    ekin2.to('eV').v, 
+                    pitch2.to('dimensionless').v,
+                    charge=q2, exi=True, toroidal=True)
+        
+        # We need now to compute the volume and the center of the cell using the
+        # the DESC file.
+        if isinstance(descfn, str) or isinstance(descfn, Path):
+            if desc is None:
+                raise ImportError("The 'desc' module is required to use "
+                                  "the 'thermal_from_desc' method.")
+            fam = desc.io.load(descfn)
+            try:  # if file is an EquilibriaFamily, use final Equilibrium
+                eq = fam[-1]
+            except:  # file is already an Equilibrium
+                eq = fam
+        else:
+            eq = descfn
+
+        if not hasattr(eq, 'compute'):
+            raise ValueError("The 'descfn' argument must be either a file "
+                             "name or a DESC Equilibrium object.")
+        
+        # Computing the volume using DESC.
+        grid = desc.grid.LinearGrid(rho=rho.v, M=eq.M_grid, N=eq.N_grid, 
+                                    NFP=eq.NFP, sym=False)
+        data = eq.compute("V(r)", grid=grid)
+        vol = np.diff(np.array(grid.compress(data["V(r)"]))) # Volume contained within each rho shell
+
+        # We need to scale the volume to the actual phi range used.
+        # The following is only true if
+        # - Axisymmetry (tokamaks).
+        # - The input grid has that allows to reduce the phi range to [phimin, phimax].
+        # @TODO: Generalize this properly.
+        dphi = (phimax - phimin).to('rad').value / (2 * np.pi)
+        vol = vol * dphi
+
+        # The volume should have the same shape of the (rho.size, theta.size, phi.size)
+        vol = vol[:, np.newaxis, np.newaxis] * np.ones((1, theta.size-1, phi.size-1))
+
+        # We now compute the center of the coordinates in cylindrical.
+        rhoc = 0.5 * (rho[:-1] + rho[1:])
+        thetac = 0.5 * (theta[:-1] + theta[1:])
+        phic = 0.5 * (phi[:-1] + phi[1:]) # This is already in cylindrical.
+
+        rr, tt, pp = np.meshgrid(rhoc.v, thetac.to('rad').v, phic.to('rad').v,
+                                 indexing='ij')
+
+        grid = desc.grid.Grid(np.stack([rr, tt, pp], axis=-1))
+        data = eq.compute(["R", "phi", "Z"], grid=grid)
+        rc = np.array(grid.compress(data["R"]))
+        zc = np.array(grid.compress(data["Z"]))
+        phic = np.array(grid.compress(data["phi"]))
+
+        for ii in [rc, zc, phic, vol]:
+            if not ii.flags["C_CONTIGUOUS"]:
+                ii = np.ascontiguousarray(ii)
+        
+        # We initialize the AFSI data structure.
+        afsi = self._init_afsi_data(
+            react1=ispecies1, react2=ispecies2, reaction=reaction, mult=mult,
+            r=rc, phi=phic, z=zc, vol=vol,
+            )
+        
+        _LIBASCOT.afsi_run(ctypes.byref(self._ascot._sim),
+                           ctypes.byref(afsi), nmc, prod1, prod2,
+                           )
+        self._ascot.input_free(bfield=True, plasma=True)
+
+        # Reload Ascot
+        self._ascot.file_load(self._ascot.file_getpath())
+        prod1 = self._build_distdata(prod1)
+        prod2 = self._build_distdata(prod2)
+        return prod1, prod2
 
     def thermal(
             self,
