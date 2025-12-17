@@ -6,8 +6,10 @@ import numpy as np
 import unyt
 import numpy.ctypeslib as npctypes
 
+from a5py.ascot5io.dist import DistData
 from a5py.ascotpy.libascot import _LIBASCOT, STRUCT_HIST, STRUCT_AFSIDATA, \
     PTR_REAL, AFSI_REACTIONS
+from a5py.ascotpy.ascot2py import hist_coordinate__enumvalues
 from a5py.exceptions import AscotNoDataException
 from a5py.routines.distmixin import DistMixin
 
@@ -235,6 +237,8 @@ class Afsi():
 
         # Reload Ascot
         self._ascot.file_load(self._ascot.file_getpath())
+        prod1 = self._build_distdata(prod1)
+        prod2 = self._build_distdata(prod2)
         return prod1, prod2
 
     def beamthermal(
@@ -543,6 +547,48 @@ class Afsi():
             nbin.ctypes.data_as(ctypes.POINTER(ctypes.c_size_t))
             )
         return prod
+
+    def _build_distdata(self, prod):
+        """
+        Transform the raw histogram data into a DistData object.
+
+        Parameters
+        ----------
+        prod : STRUCT_HIST
+            Histogram structure containing the raw data.
+        """
+        # We get the numpy representation of the data.
+        data = np.array(prod.bins[0:prod.nbin], dtype='f8')
+
+        # Then we get the sizes.
+        sizes = []
+        names = []
+        boundaries = []
+        units = {'r': unyt.m, 'phi': unyt.rad, 'z': unyt.m,
+                 'rho': unyt.dimensionless, 'theta': unyt.rad,
+                 'ppar': unyt.kg * unyt.m / unyt.s,
+                 'pperp': unyt.kg * unyt.m / unyt.s,
+                 'ekin': unyt.J, 'xi': unyt.dimensionless,
+                 'pr': unyt.kg * unyt.m / unyt.s,
+                 'pz': unyt.kg * unyt.m / unyt.s,
+                 'pphi': unyt.kg * unyt.m / unyt.s,
+                 'mu': unyt.J / unyt.T,
+                 'ptor': unyt.C * unyt.Wb,
+                 'time': unyt.s, 'charge': unyt.e}
+        for i in range(len(hist_coordinate__enumvalues)):
+            if prod.axes[i].n > 0:
+                sizes.append(prod.axes[i].n)
+                names.append(hist_coordinate__enumvalues[i].lower())
+                edges = np.linspace(
+                    prod.axes[i].min, prod.axes[i].max, prod.axes[i].n + 1)
+                boundaries.append(edges)
+        
+        abscissae = dict()
+        for ii in range(len(sizes)):
+            abscissae[names[ii]] = boundaries[ii] * units[names[ii]]
+        
+        data = data.reshape(sizes, order='C')
+        return DistData(data, **abscissae)
 
     def reactions(self, reaction=None):
         """Return reaction data for a given reaction.
