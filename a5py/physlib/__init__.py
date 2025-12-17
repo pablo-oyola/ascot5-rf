@@ -5,6 +5,7 @@ import numpy as np
 import scipy.constants as constants
 import warnings
 from functools import wraps
+import inspect
 
 from a5py.exceptions import AscotUnitWarning
 
@@ -262,13 +263,14 @@ def parseunits(strip=False, **units):
 
     This decorator:
 
-    - Makes sure every argument has expected physical dimensions.
+    - Makes sure every argument has expected dimensions.
     - Assigns units if units were not provided but they were expected.
     - Strips units if asked (after checking/assignment).
+    - Skips parsing when an argument value is None (passed through unchanged).
 
     Examples:
 
-    .. code-block:: python
+    :: code-block python
 
        @parseunits(x="m", strip=True)
        def fun(x):
@@ -289,51 +291,50 @@ def parseunits(strip=False, **units):
     def actualdecorator(fun):
         """Parse fun arguments that are expected to have units.
         """
-        argnames = list(fun.__code__.co_varnames)
+        sig = inspect.signature(fun)
+        argnames = [k for k in sig.parameters if k != 'self']
+
         def checkandstrip(val, unit, name, assignedunits):
             """Check units of a given argument and strip if needed.
             """
+            # Safeguard: if value is None, do not attempt to parse/convert
+            if val is None:
+                return None
             dim = unit.dimensions
             try:
                 # Try to get argument units
                 valdim = val.units.dimensions
             except AttributeError:
                 # Argument doesn't have units, assign and add warning
-                # except if the expected units were "dimensionless"
                 val = val*unit
                 valdim = dim
-                if dim != 1:
-                    assignedunits[name] = unit
+                assignedunits[name] = unit
 
             if valdim != dim:
                 raise ValueError(
                     "\"%s\" has incorrect dimensions: expected %s but got %s" %
                     (name, dim, valdim))
             if strip:
-                val = val.astype("f8", copy=False)
                 return val.to(unit).v
-
-            # Integers are not converted properly otherwise
-            val = val.astype("f8", copy=False)
-            return val.to(unit)
+            return val
 
         @wraps(fun)
         def wrapper(*args, **kwargs):
             """Replace args and kwargs with parsed arguments when necessary.
             """
-            parsedargs = [None]*len(args)
-            assignedunits = {} # Dimensionless units with assigned units
-            for i, name in enumerate(argnames):
-                if i == len(args): break
+            bound_args = inspect.signature(fun).bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            
+            assignedunits = {}
+            for name, val in bound_args.arguments.items():
                 if name in units:
-                    parsedargs[i] = checkandstrip(args[i], units[name],
-                                                  name, assignedunits)
-                else:
-                    parsedargs[i] = args[i]
-            for name, val in kwargs.items():
-                if name in units:
-                    kwargs[name] = checkandstrip(kwargs[name], units[name],
-                                                 name, assignedunits)
+                    bound_args.arguments[name] = checkandstrip(val, units[name], name, assignedunits)
+
+            # for name, val in kwargs.items():
+            #     if name in units:
+            #         kwargs[name] = checkandstrip(kwargs[name], units[name],
+            #                                      name, assignedunits)
+
             if len(assignedunits) > 0:
                 msg1 = "Argument(s) "
                 msg2 = " given without dimensions (assumed "
@@ -341,9 +342,9 @@ def parseunits(strip=False, **units):
                     msg1 += name + ", "
                     msg2 += str(unit) + ", "
                 msg = msg1[:-2] + msg2[:-2] + ")"
-                warnings.warn(msg, AscotUnitWarning, stacklevel=2)
+                warnings.warn(msg, UserWarning)
 
-            return fun(*parsedargs, **kwargs)
+            return fun(*bound_args.args, **bound_args.kwargs)
 
         return wrapper
 
