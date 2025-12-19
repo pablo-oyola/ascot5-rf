@@ -58,29 +58,34 @@ void afsi_sample_thermal_2d(
  * @param mult factor by which the output is scaled
  * @param prod1_data distribution data for product 1 output
  * @param prod2_data distribution data for product 2 output
+ * @param verbose verbosity level
+ * @param save_output whether to save output to HDF5 file
  */
 void afsi_run(sim_data* sim, afsi_data* afsi, int n,
-              histogram* prod1, histogram* prod2) {
+              histogram* prod1, histogram* prod2, int verbose, int save_output) {
     /* QID for this run */
     char qid[11];
     hdf5_generate_qid(qid);
     strcpy(sim->qid, qid);
 
     int mpi_rank = 0, mpi_root = 0; /* AFSI does not support MPI */
-    print_out0(VERBOSE_MINIMAL, mpi_rank, mpi_root, "AFSI5\n");
-    print_out0(VERBOSE_MINIMAL, mpi_rank, mpi_root,
+    verbose = 0 ? verbose < 0 : VERBOSE_MINIMAL;
+    print_out0(verbose, mpi_rank, mpi_root, "AFSI5\n");
+    print_out0(verbose, mpi_rank, mpi_root,
                "Tag %s\nBranch %s\n\n", GIT_VERSION, GIT_BRANCH);
 
     random_init(&rdata, time((NULL)));
     strcpy(sim->hdf5_out, sim->hdf5_in);
     simulate_init(sim);
-
-    if( hdf5_interface_init_results(sim, qid, "afsi") ) {
-        print_out0(VERBOSE_MINIMAL, mpi_rank, mpi_root,
-                   "\nInitializing output failed.\n"
-                   "See stderr for details.\n");
-        /* Free data and terminate */
-        abort();
+    
+    if(save_output != 0){
+        if( hdf5_interface_init_results(sim, qid, "afsi") ) {
+            print_out0(verbose, mpi_rank, mpi_root,
+                    "\nInitializing output failed.\n"
+                    "See stderr for details.\n");
+            /* Free data and terminate */
+            abort();
+        }
     }
 
     real m1, q1, m2, q2, mprod1, qprod1, mprod2, qprod2, Q;
@@ -216,76 +221,78 @@ void afsi_run(sim_data* sim, afsi_data* afsi, int n,
     int cprod1 = (int)rint(qprod1 / CONST_E);
     int cprod2 = (int)rint(qprod2 / CONST_E);
 
-    hid_t f = hdf5_open(sim->hdf5_out);
-    if(f < 0) {
-        print_err("Error: File not found.\n");
-        abort();
-    }
-    char path[300];
-    sprintf(path, "/results/afsi_%s/reaction", sim->qid);
-    hid_t reactiondata = H5Gcreate2(f, path, H5P_DEFAULT, H5P_DEFAULT,
-                                    H5P_DEFAULT);
-    if(reactiondata < 0) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    hsize_t size = 1;
-    real q = Q / CONST_E;
-    if(H5LTmake_dataset_double(reactiondata, "m1", 1, &size, &m1)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_double(reactiondata, "m2", 1, &size, &m2)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_double(reactiondata, "mprod1", 1, &size, &mprod1)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_double(reactiondata, "mprod2", 1, &size, &mprod2)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_double(reactiondata, "q", 1, &size, &q)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_int(reactiondata, "q1", 1, &size, &c1)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_int(reactiondata, "q2", 1, &size, &c2)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_int(reactiondata, "qprod1", 1, &size, &cprod1)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5LTmake_dataset_int(reactiondata, "qprod2", 1, &size, &cprod2)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
-    }
-    if(H5Gclose(reactiondata)) {
-        print_err("Failed to write reaction data.\n");
-        abort();
+    if(save_output != 0){
+        hid_t f = hdf5_open(sim->hdf5_out);
+        if(f < 0) {
+            print_err("Error: File not found.\n");
+            abort();
+        }
+        char path[300];
+        sprintf(path, "/results/afsi_%s/reaction", sim->qid);
+        hid_t reactiondata = H5Gcreate2(f, path, H5P_DEFAULT, H5P_DEFAULT,
+                                        H5P_DEFAULT);
+        if(reactiondata < 0) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        hsize_t size = 1;
+        real q = Q / CONST_E;
+        if(H5LTmake_dataset_double(reactiondata, "m1", 1, &size, &m1)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_double(reactiondata, "m2", 1, &size, &m2)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_double(reactiondata, "mprod1", 1, &size, &mprod1)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_double(reactiondata, "mprod2", 1, &size, &mprod2)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_double(reactiondata, "q", 1, &size, &q)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_int(reactiondata, "q1", 1, &size, &c1)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_int(reactiondata, "q2", 1, &size, &c2)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_int(reactiondata, "qprod1", 1, &size, &cprod1)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5LTmake_dataset_int(reactiondata, "qprod2", 1, &size, &cprod2)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+        if(H5Gclose(reactiondata)) {
+            print_err("Failed to write reaction data.\n");
+            abort();
+        }
+
+        sprintf(path, "/results/afsi_%s/prod1dist5d", sim->qid);
+        if( hdf5_hist_write(f, path, prod1) ) {
+            print_err("Warning: 5D distribution could not be written.\n");
+        }
+        sprintf(path, "/results/afsi_%s/prod2dist5d", sim->qid);
+        if( hdf5_hist_write(f, path, prod2) ) {
+            print_err("Warning: 5D distribution could not be written.\n");
+        }
+        if(hdf5_close(f)) {
+            print_err("Failed to close the file.\n");
+            abort();
+        }
     }
 
-    sprintf(path, "/results/afsi_%s/prod1dist5d", sim->qid);
-    if( hdf5_hist_write(f, path, prod1) ) {
-        print_err("Warning: 5D distribution could not be written.\n");
-    }
-    sprintf(path, "/results/afsi_%s/prod2dist5d", sim->qid);
-    if( hdf5_hist_write(f, path, prod2) ) {
-        print_err("Warning: 5D distribution could not be written.\n");
-    }
-    if(hdf5_close(f)) {
-        print_err("Failed to close the file.\n");
-        abort();
-    }
-
-    print_out0(VERBOSE_MINIMAL, mpi_rank, mpi_root, "\nDone\n");
+    print_out0(verbose, mpi_rank, mpi_root, "\nDone\n");
 }
 
 /**

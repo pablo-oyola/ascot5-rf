@@ -203,14 +203,21 @@ class Afsi():
             react1=ispecies1, react2=ispecies2, reaction=reaction, mult=mult,
             r=rc, phi=phic, z=zc, vol=vol,
             )
+
+        if self._ascot.mute == 'err':
+            verbose = 2
+        elif self._ascot.mute == 'yes':
+            verbose = 3
+        else:
+            verbose = 1
         
         _LIBASCOT.afsi_run(ctypes.byref(self._ascot._sim),
                            ctypes.byref(afsi), nmc, prod1, prod2,
-                           )
+                           verbose, 0)
         self._ascot.input_free(bfield=True, plasma=True)
 
         # Reload Ascot
-        self._ascot.file_load(self._ascot.file_getpath())
+        # self._ascot.file_load(self._ascot.file_getpath())
         prod1 = self._build_distdata(prod1)
         prod2 = self._build_distdata(prod2)
         return prod1, prod2
@@ -404,13 +411,21 @@ class Afsi():
                     rho, theta*np.pi/180, phi*np.pi/180, ppar2, pperp2,
                     charge=q2, exi=False, toroidal=True)
 
+        if self._ascot.mute == 'err':
+            verbose = 2
+        elif self._ascot.mute == 'yes':
+            verbose = 3
+        else:
+            verbose = 1
+        
         _LIBASCOT.afsi_run(ctypes.byref(self._ascot._sim),
                            ctypes.byref(afsi), nmc, prod1, prod2,
-                           )
+                           verbose, 0)
+
         self._ascot.input_free(bfield=True, plasma=True)
 
-        # Reload Ascot
-        self._ascot.file_load(self._ascot.file_getpath())
+        # Reload Ascot - not needed anymore.
+        # self._ascot.file_load(self._ascot.file_getpath())
         prod1 = self._build_distdata(prod1)
         prod2 = self._build_distdata(prod2)
         return prod1, prod2

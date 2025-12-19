@@ -3372,7 +3372,7 @@ afsi_data = struct_c__SA_afsi_data
 try:
     afsi_run = _libraries['libascot.so'].afsi_run
     afsi_run.restype = None
-    afsi_run.argtypes = [ctypes.POINTER(struct_c__SA_sim_data), ctypes.POINTER(struct_c__SA_afsi_data), ctypes.c_int32, ctypes.POINTER(struct_c__SA_histogram), ctypes.POINTER(struct_c__SA_histogram)]
+    afsi_run.argtypes = [ctypes.POINTER(struct_c__SA_sim_data), ctypes.POINTER(struct_c__SA_afsi_data), ctypes.c_int32, ctypes.POINTER(struct_c__SA_histogram), ctypes.POINTER(struct_c__SA_histogram), ctypes.c_int32, ctypes.c_int32]
 except AttributeError:
     pass
 try:

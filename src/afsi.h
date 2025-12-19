@@ -42,5 +42,6 @@ typedef struct {
 } afsi_data;
 
 void afsi_run(sim_data* sim, afsi_data* data, int n,
-              histogram* prod1, histogram* prod2);
+              histogram* prod1, histogram* prod2,
+              int verbose, int save_output);
 #endif
