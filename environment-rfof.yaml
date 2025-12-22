@@ -8,7 +8,7 @@ dependencies:
   - libxml2
   - pkg-config
   - libgomp
-  - python>=3.10
+  - python>=3.10,<3.14
   - hdf5
   - zlib
   - setuptools
