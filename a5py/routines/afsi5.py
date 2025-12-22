@@ -50,7 +50,7 @@ class Afsi():
         self._ascot = ascot
 
     @parseunits(rho='dimensionless', phimin='deg', phimax='deg',
-                ekin1='keV', ekin2='keV', pitch1='dimensionless',
+                ekin1='eV', ekin2='eV', pitch1='dimensionless',
                 pitch2='dimensionless', strip=False)
     def thermal_from_desc(self, reaction, descfn, rho=None, 
                           phimin=0.0, phimax=360.0*unyt.deg,
@@ -162,7 +162,7 @@ class Afsi():
         if not hasattr(eq, 'compute'):
             raise ValueError("The 'descfn' argument must be either a file "
                              "name or a DESC Equilibrium object.")
-        
+
         # Computing the volume using DESC.
         grid = desc.grid.LinearGrid(rho=rho.v, M=eq.M_grid, N=eq.N_grid, 
                                     NFP=eq.NFP, sym=False)
@@ -204,9 +204,9 @@ class Afsi():
             r=rc, phi=phic, z=zc, vol=vol,
             )
 
-        if self._ascot.mute == 'err':
+        if self._ascot._mute == 'err':
             verbose = 2
-        elif self._ascot.mute == 'yes':
+        elif self._ascot._mute == 'yes':
             verbose = 3
         else:
             verbose = 1
@@ -411,9 +411,9 @@ class Afsi():
                     rho, theta*np.pi/180, phi*np.pi/180, ppar2, pperp2,
                     charge=q2, exi=False, toroidal=True)
 
-        if self._ascot.mute == 'err':
+        if self._ascot._mute == 'err':
             verbose = 2
-        elif self._ascot.mute == 'yes':
+        elif self._ascot._mute == 'yes':
             verbose = 3
         else:
             verbose = 1
