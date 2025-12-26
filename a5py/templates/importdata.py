@@ -2087,6 +2087,101 @@ class ImportData():
         data.pop("zlcfs", None)
         return ("B_STS", data)
 
+    @staticmethod
+    def import_desc_lcfs_as_wall(fn: str, npoints: int=1000,
+                                 rescale_R: float | None = None,
+                                 rescale_B: float | None = None,
+                                 ) -> tuple[str, dict]:
+        """Import the LCFS from a DESC equilibrium as a wall for ASCOT.
+
+        Parameters
+        ----------
+        fn : str
+            File path to DESC HDF5 output.
+        npoints : int, optional
+            Number of points to use for the wall representation. Default = 1000.
+        Returns
+        -------
+        gtype : str
+            Type of the generated input data.
+        data : dict
+            Input data that can be passed to ``write_hdf5`` method of
+            a corresponding type.
+        """
+        if not os.path.isfile(fn):
+            raise FileNotFoundError(f"DESC file {fn} not found.")
+
+        fam = dscio.load(fn, file_format="hdf5")
+        try:  # if file is an EquilibriaFamily, use final Equilibrium
+            eq = fam[-1]
+        except:  # file is already an Equilibrium
+            eq = fam
+
+        if (rescale_R is not None) and (rescale_B is not None):
+            eq = rescale(eq, L=("R0", rescale_R), B=("B0", rescale_B))
+        elif rescale_R is not None:
+            eq = rescale(eq, L=("R0", rescale_R))
+        elif rescale_B is not None:
+            eq = rescale(eq, B=("B0", rescale_B))
+
+
+        # boundary
+        grid = dscg.LinearGrid(
+            rho=1.0, theta=360, zeta=1024, NFP=1, sym=False, endpoint=True
+        )
+        data = eq.compute(["R", "Z"], grid=grid)
+        bdry_r = data["R"].reshape((grid.num_zeta, grid.num_theta), order="C").T
+        bdry_z = data["Z"].reshape((grid.num_zeta, grid.num_theta), order="C").T
+        
+        # We now generate the points.
+        bdry_r = np.array(bdry_r)
+        bdry_z = np.array(bdry_z)
+        phi    = np.linspace(0, 2*np.pi, bdry_r.shape[1], endpoint=False)
+        phi = np.tile(phi, (bdry_r.shape[0], 1))
+        X = bdry_r * np.cos(phi)
+        Y = bdry_r * np.sin(phi)
+        Z = bdry_z
+
+        # We now build the triangles.
+        vertices = np.column_stack([
+            X.ravel(),
+            Y.ravel(),
+            Z.ravel()
+        ])
+
+        # Create triangles
+        triangles = []
+        ntheta = bdry_r.shape[0]
+        nphi = bdry_r.shape[1]
+        for i in range(ntheta):
+            for j in range(nphi):
+                p0 = i * nphi + j
+                p1 = i * nphi + (j + 1) % nphi
+                p2 = ((i + 1) % ntheta) * nphi + j
+                p3 = ((i + 1) % ntheta) * nphi + (j + 1) % nphi
+                triangles.append([p0, p2, p1])
+                triangles.append([p1, p2, p3])
+        triangles = np.asarray(triangles, dtype=int)
+
+        # We now need to build the point structures as in ASCOT wall.
+        ntri = triangles.shape[0]
+        x1x2x3 = np.zeros(3*ntri)
+        y1y2y3 = np.zeros(3*ntri)
+        z1z2z3 = np.zeros(3*ntri)
+        for itri in range(ntri):
+            for ivec in range(3):
+                ipoint = triangles[itri, ivec]
+                x1x2x3[3*itri + ivec] = vertices[ipoint, 0]
+                y1y2y3[3*itri + ivec] = vertices[ipoint, 1]
+                z1z2z3[3*itri + ivec] = vertices[ipoint, 2]
+        n = ntri // (2*nphi)
+
+        # Generating the 3D wall data.
+        wall = {"nelements" : 2*n*nphi, "x1x2x3" : x1x2x3,
+                "y1y2y3" : y1y2y3, "z1z2z3" : z1z2z3}
+        
+        return ("wall_3d", wall)
+
     def import_nbi_waveforms(self, fn="nbi_waveforms.yaml"):
         """Import NBI geometry from a YAML file.
 
