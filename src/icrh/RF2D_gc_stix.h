@@ -35,7 +35,7 @@ typedef struct RF2D_gc_stix{
     // 2D wave field.
     interp2D_data* Eplus_2;  /** Interpolation object for |E_+^2|*/
     interp2D_data* Eminus_2; /** Interpolation object for |E_-^2|*/
-    interp2D_data* E2cross;  /** Interpolation object for Re(E_+^2 cnjt(E_-)) */
+    interp2D_data* E2cross;  /** Interpolation object for Re(E_+ cnjt(E_-)) */
     interp2D_data* kperp;    /** Local value of the perpendicular vector */
 
     // Outer resources.
