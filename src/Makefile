@@ -1,4 +1,4 @@
-CC=h5cc
+CC?=cc
 LFLAGS=
 
 ifdef TRAP_FPE

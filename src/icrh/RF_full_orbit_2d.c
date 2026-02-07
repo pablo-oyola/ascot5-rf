@@ -191,6 +191,20 @@ void RF2D_fields_offload(RF2D_fields* rffield_data){
                       rffield_data->ntor, rffield_data->omega);
 }
 
+void RF2D_fields_scale_amplitude(RF2D_fields* rffield_data, real factor){
+    if(!rffield_data) return;
+    if(!isfinite(factor)) return;
+    if(!rffield_data->initialized) return;
+    for(int i = 0; i < 12; i++){
+        interp2D_data* o = rffield_data->introbj[i];
+        if(!o || !o->c) continue;
+        if(o->n_x <= 0 || o->n_y <= 0) continue;
+        int nsize = o->n_x * o->n_y * (int)NSIZE_COMP2D;
+        if(nsize <= 0) continue;
+        for(int j = 0; j < nsize; j++)
+            o->c[j] *= factor;
+    }
+}
 
 a5err RF2D_field_eval(real E[3], real B[3], real r, real phi,\
                       real z, real t, RF2D_fields* rffield_data){

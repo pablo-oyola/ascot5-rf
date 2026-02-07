@@ -589,6 +589,29 @@ class LibAscot:
         
         return out
 
+    def simulation_scale_rf_amplitude(self, factor):
+        """Scale RF field spline coefficients by a factor (in place).
+
+        Calls libascot_rffield_scale_amplitude to multiply all host-side RF
+        spline coefficients by factor. Used for time-dependent RF power:
+        call with factor = new_scale/previous_scale (RF2D/RF3D use sqrt(power)
+        as scale; RF2D_Stix uses power directly).
+
+        Parameters
+        ----------
+        factor : float
+            Multiplier applied to every coefficient. Must be finite.
+            No-op if factor is not finite or if libascot.so is not loaded.
+        """
+        if _LIBASCOT is None:
+            return
+        if not np.isfinite(float(factor)):
+            return
+        fun = _LIBASCOT.libascot_rffield_scale_amplitude
+        fun.restype = None
+        fun.argtypes = [PTR_SIM, ctypes.c_double]
+        fun(ctypes.byref(self._sim), ctypes.c_double(float(factor)))
+
     @parseunits(ma="kg", qa="C", r="m", phi="rad", z="m", t="s", va="m/s")
     def input_eval_collcoefs(self, ma, qa, r, phi, z, t, va, *coefs, grid=True):
         """Evaluate Coulomb collision coefficients for a given test particle.

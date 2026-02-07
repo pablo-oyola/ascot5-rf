@@ -47,6 +47,7 @@ a5err RF2D_fields_init( RF2D_fields* rffield_data, real rmin, real rmax, int nr,
                         real* Bphi_imag, real* Bz_real, real* Bz_imag);
 void RF2D_fields_free(RF2D_fields* rffield_data);
 void RF2D_fields_offload(RF2D_fields* rffield_data);
+void RF2D_fields_scale_amplitude(RF2D_fields* rffield_data, real factor);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rffield_data)
 a5err RF2D_field_eval(real E[3], real B[3], real r, real phi,\

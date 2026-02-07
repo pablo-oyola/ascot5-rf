@@ -195,6 +195,21 @@ void RF3D_fields_offload(RF3D_fields* rffield_data){
                       rffield_data->ntor, rffield_data->omega);
 }
 
+void RF3D_fields_scale_amplitude(RF3D_fields* rffield_data, real factor){
+    if(!rffield_data) return;
+    if(!isfinite(factor)) return;
+    if(!rffield_data->initialized) return;
+    for(int i = 0; i < 12; i++){
+        interp3D_data* o = rffield_data->introbj[i];
+        if(!o || !o->c) continue;
+        if(o->n_x <= 0 || o->n_y <= 0 || o->n_z <= 0) continue;
+        int nsize = o->n_x * o->n_y * o->n_z * (int)NSIZE_COMP3D;
+        if(nsize <= 0) continue;
+        for(int j = 0; j < nsize; j++)
+            o->c[j] *= factor;
+    }
+}
+
 a5err RF3D_field_eval(real E[3], real B[3], real r, real phi,\
                        real z, real t, RF3D_fields* rffield_data){
     a5err err = 0; // Error flag

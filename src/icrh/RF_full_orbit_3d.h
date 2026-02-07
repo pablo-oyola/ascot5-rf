@@ -47,6 +47,7 @@ int RF3D_fields_init( RF3D_fields* rffield_data, real rmin, real rmax, int nr, \
                       real* Bphi_imag, real* Bz_real, real* Bz_imag);
 void RF3D_fields_free(RF3D_fields* rffield_data);
 void RF3D_fields_offload(RF3D_fields* rffield_data);
+void RF3D_fields_scale_amplitude(RF3D_fields* rffield_data, real factor);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rffield_data)
 a5err RF3D_field_eval(real E[3], real B[3], real r, real phi,\

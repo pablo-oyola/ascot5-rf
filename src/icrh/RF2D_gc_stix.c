@@ -451,6 +451,20 @@ void RF2D_gc_stix_offload(RF2D_gc_stix* stix_data){
     }
 }
 
+void RF2D_gc_stix_scale_amplitude(RF2D_gc_stix* stix_data, real factor){
+    if(!stix_data) return;
+    if(!isfinite(factor)) return;
+    interp2D_data* arr[] = { stix_data->Eplus_2, stix_data->Eminus_2, stix_data->E2cross };
+    for(int i = 0; i < 3; i++){
+        if(!arr[i] || !arr[i]->c) continue;
+        if(arr[i]->n_x <= 0 || arr[i]->n_y <= 0) continue;
+        int nsize = arr[i]->n_x * arr[i]->n_y * (int)NSIZE_COMP2D;
+        if(nsize <= 0) continue;
+        for(int j = 0; j < nsize; j++)
+            arr[i]->c[j] *= factor;
+    }
+}
+
 /**
  * @brief Computes the cold resonance locations based on the frequencies and the
  * magnetic field strenght.

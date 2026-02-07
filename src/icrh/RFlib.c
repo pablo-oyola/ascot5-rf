@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include "../hdf5io/hdf5_helpers.h"
 #include "RFlib.h"
 #include "RF2D_gc_stix.h"
@@ -55,6 +56,24 @@ void RF_fields_offload(RF_fields* rf){
         RF3D_fields_offload(&rf->rf3d);
     } else if(rf->type == RF2D_GC_STIX){
         RF2D_gc_stix_offload(&rf->stix);
+    }
+}
+
+void RF_fields_scale_amplitude(RF_fields* rf, real factor){
+    if(!rf) return;
+    if(!isfinite(factor)) return;
+    switch(rf->type){
+        case RF_FULL_ORBIT_2D:
+            RF2D_fields_scale_amplitude(&rf->rf2d, factor);
+            break;
+        case RF_FULL_ORBIT_3D:
+            RF3D_fields_scale_amplitude(&rf->rf3d, factor);
+            break;
+        case RF2D_GC_STIX:
+            RF2D_gc_stix_scale_amplitude(&rf->stix, factor);
+            break;
+        default:
+            break;
     }
 }
 

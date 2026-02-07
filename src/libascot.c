@@ -971,6 +971,24 @@ void libascot_rffield_eval_fields(sim_data* sim, int Neval,
 
 }
 
+/**
+ * @brief Scale RF field spline coefficients by a factor (in place).
+ *
+ * Multiplies all host-side RF spline coefficients by factor. Used for
+ * time-dependent RF power: call with factor = new_scale/previous_scale so
+ * coefficients become base * new_scale. RF2D/RF3D use sqrt(power) as scale;
+ * RF2D_Stix uses power directly.
+ *
+ * @param sim initialized simulation data struct (must have RF inputs loaded)
+ * @param factor multiplier applied to every coefficient; must be finite
+ */
+void libascot_rffield_scale_amplitude(sim_data* sim, real factor){
+    if(!sim) return;
+    if(sim->enable_rf == 0) return;
+    if(sim->rffield_data.type == RF_NONE) return;
+    RF_fields_scale_amplitude(&sim->rffield_data, factor);
+}
+
 void libascot_gc2prt(sim_data* sim, int Neval, 
                    real mass, real charge, 
                    real* Rgc, real* phigc, real* zgc, real* ppar, real* mu, real *zeta,

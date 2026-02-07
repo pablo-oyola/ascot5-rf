@@ -77,6 +77,7 @@ a5err RF2D_gc_stix_init(RF2D_gc_stix* stix_data,
 
 void RF2D_gc_stix_free(RF2D_gc_stix* stix_data);
 void RF2D_gc_stix_offload(RF2D_gc_stix* stix_data);
+void RF2D_gc_stix_scale_amplitude(RF2D_gc_stix* stix_data, real factor);
 real guess_qm(particle_queue* pq);
 
 // Internal useful functions.

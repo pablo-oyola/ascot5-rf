@@ -33,6 +33,7 @@ a5err RF_fields_init(RF_fields* rf, hid_t f, char* qid,
                     int lhigh, B_field_data* bdata);
 void RF_fields_free(RF_fields* rf);
 void RF_fields_offload(RF_fields* rf);
+void RF_fields_scale_amplitude(RF_fields* rf, real factor);
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(rf)
 a5err RF_fields_eval(real E[3], real B[3], real r, real phi, real z, real t, RF_fields* rf);
