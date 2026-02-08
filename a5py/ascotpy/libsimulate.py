@@ -140,12 +140,24 @@ class LibSimulate():
             self._sim.sim_mode == ascot2py.simulate_mode_hybrid):
             diagorb.record_mode = ascot2py.simulate_mode_gc
 
-        torangs = opt["ORBITWRITE_TOROIDALANGLES"]
-        torangs = torangs if isinstance(torangs, list) else [torangs]
-        polangs = opt["ORBITWRITE_POLOIDALANGLES"]
-        polangs = polangs if isinstance(polangs, list) else [polangs]
-        radials = opt["ORBITWRITE_RADIALDISTANCES"]
-        radials = radials if isinstance(radials, list) else [radials]
+        def _as_list(values):
+            if isinstance(values, list):
+                return values
+            if isinstance(values, np.ndarray):
+                as_list = values.tolist()
+                return as_list if isinstance(as_list, list) else [as_list]
+            if isinstance(values, tuple):
+                return list(values)
+            if np.isscalar(values):
+                return [values]
+            try:
+                return list(values)
+            except TypeError:
+                return [values]
+
+        torangs = _as_list(opt["ORBITWRITE_TOROIDALANGLES"])
+        polangs = _as_list(opt["ORBITWRITE_POLOIDALANGLES"])
+        radials = _as_list(opt["ORBITWRITE_RADIALDISTANCES"])
 
         diagorb.ntoroidalplots = len(torangs)
         for i in range(diagorb.ntoroidalplots):
