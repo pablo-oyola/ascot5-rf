@@ -92,6 +92,8 @@ class N0_1D(DataGroup):
         density     = np.transpose(density)
         temperature = np.transpose(temperature)
 
+        nspecies = np.array(nspecies).item()  # Ensure it's a scalar int, not array of shape (1,)
+        nrho     = np.array(nrho).item()      # Ensure it's a scalar int, not array of shape (1,)
         if maxwellian == 1:
             maxwellian = np.ones( (int(nspecies),1) )
 

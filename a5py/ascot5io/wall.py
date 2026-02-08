@@ -260,7 +260,7 @@ class wall_3D(DataGroup):
             for key in f[path]:
                 out[key] = f[path][key][:]
                 if key == "nelements":
-                    out[key] = int(out[key])
+                    out[key] = int(out[key].item())
 
             if "flagIdStrings" in f[path+"/flag"].attrs:
                 flagnames = f[path+"/flag"].attrs.get("flagIdStrings")

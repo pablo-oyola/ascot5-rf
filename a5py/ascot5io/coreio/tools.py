@@ -232,7 +232,7 @@ def combineoutput(fnt, fns, add=True):
                 sdata = source["endstate"]
                 t_sorted = np.argsort(tdata["ids"][:])
                 s_sorted = np.argsort(sdata["ids"][:])
-                idx = np.argwhere(np.in1d(tdata['ids'][t_sorted],
+                idx = np.argwhere(np.isin(tdata['ids'][t_sorted],
                                           sdata['ids'][s_sorted])).ravel()
                 for field in tdata:
                     data = tdata[field][:][t_sorted]

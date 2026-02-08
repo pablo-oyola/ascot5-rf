@@ -51,7 +51,7 @@ class Marker(DataGroup):
             rng  = np.random.default_rng()
             pick = rng.choice(mrk["ids"].ravel(), size=(pick,), replace=False)
 
-        idx = np.where(np.in1d(mrk["ids"], pick))
+        idx = np.where(np.isin(mrk["ids"], pick).reshape(mrk["ids"].shape))
         for k in mrk:
             if k == "n": continue
             mrk[k] = mrk[k][idx]

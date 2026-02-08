@@ -29,7 +29,7 @@ class Asigma_loc(DataGroup):
             for key in f[path]:
                 out[key] = f[path][key][:]
                 if key in ["nreac"]:
-                    out[key] = int(out[key])
+                    out[key] = int(out[key].item())
 
         return out
 
@@ -93,7 +93,7 @@ class Asigma_loc(DataGroup):
         n = np.zeros(nreac, dtype=int)
         ntot = 0
         for i in range(0, nreac):
-            n[i] = nenergy[i] * ndensity[i] * ntemperature[i]
+            n[i] = np.squeeze(nenergy[i] * ndensity[i] * ntemperature[i]).item()
             ntot += n[i]
         if sigma.shape != (1,ntot):
             raise ValueError("Invalid size for sigma.")

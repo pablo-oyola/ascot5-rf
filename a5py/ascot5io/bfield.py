@@ -380,6 +380,7 @@ class B_2DS(DataGroup):
         br   = np.transpose(br)
         bphi = np.transpose(bphi)
         bz   = np.transpose(bz)
+        shape2write = psi.shape
 
         parent = "bfield"
         group  = "B_2DS"
@@ -400,10 +401,10 @@ class B_2DS(DataGroup):
             g.create_dataset("psi0",  (1,), data=psi0,  dtype="f8")
             g.create_dataset("psi1",  (1,), data=psi1,  dtype="f8")
 
-            g.create_dataset("psi",  (nz, nr), data=psi,  dtype="f8")
-            g.create_dataset("br",   (nz, nr), data=br,   dtype="f8")
-            g.create_dataset("bphi", (nz, nr), data=bphi, dtype="f8")
-            g.create_dataset("bz",   (nz, nr), data=bz,   dtype="f8")
+            g.create_dataset("psi",  shape2write, data=psi,  dtype="f8")
+            g.create_dataset("br",   shape2write, data=br,   dtype="f8")
+            g.create_dataset("bphi", shape2write, data=bphi, dtype="f8")
+            g.create_dataset("bz",   shape2write, data=bz,   dtype="f8")
 
         return gname
 

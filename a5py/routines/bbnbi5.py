@@ -85,7 +85,8 @@ class BBNBIMixin(DistMixin):
             idx = mask[uidx]
 
         if ids is not None:
-            idx = np.logical_and(idx, np.in1d(self._state.get("ids"), ids))
+            _state_ids = self._state.get("ids")[0]
+            idx = np.logical_and(idx, np.isin(_state_ids, ids).reshape(_state_ids.shape))
 
         for i in range(len(data)):
             data[i] = data[i][idx]

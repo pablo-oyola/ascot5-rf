@@ -33,7 +33,7 @@ class Boozer(DataGroup):
             for key in f[path]:
                 out[key] = f[path][key][:]
                 if key in ["npsi", "ntheta", "nthetag", "nr", "nz", "nrzs"]:
-                    out[key] = int(out[key])
+                    out[key] = int(out[key].item())
 
         # (Remove padding to theta_psithetageom)
         padding = 4

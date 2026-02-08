@@ -134,6 +134,8 @@ class MHD_STAT(DataGroup):
         ValueError
             If inputs were not consistent.
         """
+        nmode = np.array(nmode).item()  # Ensure it's a scalar int, not array of shape (1,)
+        nrho  = np.array(nrho).item()   # Ensure it's a scalar int, not array of shape (1,)
         if nmodes.size != nmode:
             raise ValueError("Shape of nmodes is inconsistent with nmode")
         if mmodes.size != nmode:
@@ -148,7 +150,6 @@ class MHD_STAT(DataGroup):
         parent = "mhd"
         group  = "MHD_STAT"
         gname  = ""
-
         with h5py.File(fn, "a") as f:
             g = add_group(f, parent, group, desc=desc)
             gname = g.name.split("/")[-1]
@@ -315,6 +316,8 @@ class MHD_NONSTAT(DataGroup):
         ValueError
             If inputs were not consistent.
         """
+        nmode = np.array(nmode).item()  # Ensure it's a scalar int, not array of shape (1,)
+        nrho  = np.array(nrho).item()   # Ensure it's a scalar int, not array of shape (1,) 
         if nmodes.size != nmode:
             raise ValueError("Shape of nmodes is inconsistent with nmode")
         if mmodes.size != nmode:
