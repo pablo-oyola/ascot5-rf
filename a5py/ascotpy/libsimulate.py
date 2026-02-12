@@ -235,7 +235,10 @@ class LibSimulate():
     def simulation_initmarkers(self, **mrk):
         """Create markers for the interactive simulations.
 
-        Any existing markers are deallocated when new ones are created.
+        Memory is reused when possible. Only reallocates if:
+        - No previous allocation exists
+        - New marker count exceeds current capacity
+        - Explicit reallocation is needed
 
         Parameters
         ----------
@@ -250,18 +253,26 @@ class LibSimulate():
             # If libascot.so is not found, raise exception
             raise AscotInitException(
                 "Python interface disabled as libascot.so is not found")
-        if self._nmrk.value > 0:
-            # Deallocate previous markers
-            ascot2py.libascot_deallocate(self._inistate)
-            self._nmrk.value = 0
-            self._virtualmarkers = None
         if not mrk:
             # Read markers from HDF5 file
             mrk = self.data.marker.active.read()
 
         self._virtualmarkers = mrk
         nmrk = mrk["n"]
-        pin = ascot2py.libascot_allocate_input_particles(nmrk)
+        
+        # Reuse or allocate pin buffer
+        if self._pin_buffer is None or nmrk > self._pin_buffer_capacity:
+            if self._pin_buffer is not None:
+                ascot2py.libascot_deallocate(self._pin_buffer)
+            self._pin_buffer = ascot2py.libascot_allocate_input_particles(nmrk)
+            self._pin_buffer_capacity = nmrk
+        elif nmrk < self._pin_buffer_capacity * self._shrink_threshold:
+            # Shrink if significantly smaller
+            ascot2py.libascot_deallocate(self._pin_buffer)
+            self._pin_buffer = ascot2py.libascot_allocate_input_particles(nmrk)
+            self._pin_buffer_capacity = nmrk
+        
+        pin = self._pin_buffer
         prttypes = ascot2py.input_particle_type__enumvalues
 
         # particle
@@ -363,13 +374,26 @@ class LibSimulate():
                 ctypes.byref(self._sim), self._nmrk, pin, ctypes.byref(ps),
                 ctypes.byref(n_proc))
 
+            # Reuse or allocate _inistate
+            # Note: mpi_gather_particlestate may allocate/reallocate _inistate internally
+            # We track capacity to help with reuse decisions
+            if (self._inistate is None or 
+                nmrk > self._inistate_capacity):
+                if self._inistate is not None:
+                    ascot2py.libascot_deallocate(self._inistate)
+                self._inistate = ctypes.pointer(_get_struct_class("particle_state")())
+
             ascot2py.mpi_gather_particlestate(
                 ps, ctypes.byref(self._inistate), ctypes.byref(n_proc), self._nmrk,
                 self._sim.mpi_rank, self._sim.mpi_size, self._sim.mpi_root)
+            
+            # Update capacity tracking after gather (with headroom for future growth)
+            self._inistate_capacity = max(nmrk, int(nmrk * 1.2))  # 20% headroom
 
             if self._sim.mpi_rank == self._sim.mpi_root:
                 ascot2py.libascot_deallocate(ps)
             else:
+                # Non-root: ps becomes new _inistate, old _inistate was already replaced
                 ascot2py.libascot_deallocate(self._inistate)
                 self._inistate = ps
 
@@ -415,9 +439,6 @@ class LibSimulate():
         if self._nmrk.value == 0:
             raise AscotInitException(
                 "Initialize markers before running the simulation")
-        if self._diag_occupied:
-            raise AscotInitException(
-                "Free previous results before running the simulation")
 
         # Make an inistate from markers belonging to this process
         n_proc = ctypes.c_int32(0)
@@ -425,19 +446,36 @@ class LibSimulate():
         ascot2py.mpi_my_particles(
             ctypes.byref(idx), ctypes.byref(n_proc), self._nmrk,
             self._sim.mpi_rank, self._sim.mpi_size)
-        inistate = ascot2py.libascot_allocate_particle_states(n_proc.value)
+        
+        # Reuse or allocate per-process inistate
+        if (self._inistate_proc is None or 
+            n_proc.value > self._inistate_proc_capacity):
+            if self._inistate_proc is not None:
+                ascot2py.libascot_deallocate(self._inistate_proc)
+            self._inistate_proc = ascot2py.libascot_allocate_particle_states(n_proc.value)
+            self._inistate_proc_capacity = n_proc.value
+        
+        inistate = self._inistate_proc
 
-        # Copy values from inistate to _inistate. Latter contains all markers
+        # Copy values from _inistate to inistate
         for i in range(len(ascot2py.particle_state._fields_)):
             name = self._inistate[0]._fields_[i][0]
             for j in range(n_proc.value):
                 val  = getattr(self._inistate[j], name)
                 setattr(inistate[j], name, val)
 
-        # Initialize diagnostics array and endstate
-        self._endstate = ctypes.pointer(_get_struct_class("particle_state")())
-        ascot2py.diag_init(ctypes.byref(self._sim.diag_data), self._nmrk)
-        self._diag_occupied = True
+        # Reuse or allocate endstate
+        if (self._endstate is None or 
+            self._nmrk.value > self._endstate_capacity):
+            if self._endstate is not None:
+                ascot2py.libascot_deallocate(self._endstate)
+            self._endstate = ctypes.pointer(_get_struct_class("particle_state")())
+            self._endstate_capacity = max(self._nmrk.value, int(self._nmrk.value * 1.2))
+        
+        # Initialize diagnostics (reuse if already initialized)
+        if not self._diag_occupied:
+            ascot2py.diag_init(ctypes.byref(self._sim.diag_data), self._nmrk)
+            self._diag_occupied = True
 
         # Simulate and print stdout/stderr if requested
         def runsim():
@@ -598,11 +636,30 @@ class LibSimulate():
 
         if inputs:
             self.input_free()
-        if markers and self._nmrk.value > 0:
+        if markers:
+            if self._pin_buffer is not None:
+                ascot2py.libascot_deallocate(self._pin_buffer)
+                self._pin_buffer = None
+                self._pin_buffer_capacity = 0
+            
+            if self._inistate is not None:
+                ascot2py.libascot_deallocate(self._inistate)
+                self._inistate = None
+                self._inistate_capacity = 0
+            
+            if self._inistate_proc is not None:
+                ascot2py.libascot_deallocate(self._inistate_proc)
+                self._inistate_proc = None
+                self._inistate_proc_capacity = 0
+            
             self._nmrk.value = 0
-            ascot2py.libascot_deallocate(self._inistate)
             self._virtualmarkers = None
-        if diagnostics and self._diag_occupied:
-            self._diag_occupied = False
-            ascot2py.diag_free(ctypes.byref(self._sim.diag_data))
-            ascot2py.libascot_deallocate(self._endstate)
+        if diagnostics:
+            if self._diag_occupied:
+                ascot2py.diag_free(ctypes.byref(self._sim.diag_data))
+                self._diag_occupied = False
+            
+            if self._endstate is not None:
+                ascot2py.libascot_deallocate(self._endstate)
+                self._endstate = None
+                self._endstate_capacity = 0

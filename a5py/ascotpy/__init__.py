@@ -56,9 +56,19 @@ class Ascotpy(LibAscot, LibSimulate, LibProviders):
 
         # Initialize attributes
         self._nmrk = ctypes.c_int32()
-        self._inistate = ctypes.POINTER(_get_struct_class("particle_state"))()
-        self._endstate = ctypes.POINTER(_get_struct_class("particle_state"))()
+        self._inistate = None
+        self._endstate = None
         self._diag_occupied = False
+        
+        # Memory reuse tracking
+        self._pin_buffer = None
+        self._inistate_proc = None
+        self._inistate_capacity = 0
+        self._endstate_capacity = 0
+        self._inistate_proc_capacity = 0
+        self._pin_buffer_capacity = 0
+        self._realloc_threshold = 1.5
+        self._shrink_threshold = 0.5
 
         self._sim = _get_struct_class("sim_data")()
         self._mute = "no"
