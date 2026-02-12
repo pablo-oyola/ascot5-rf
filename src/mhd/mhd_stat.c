@@ -36,6 +36,8 @@ int mhd_stat_init(mhd_stat_data* data, int nmode, int nrho,
     data->amplitude_nm = (real*) malloc(nmode * sizeof(real));
     data->phi_nm = (interp1D_data*) malloc(nmode * sizeof(interp1D_data));
     data->alpha_nm = (interp1D_data*) malloc(nmode * sizeof(interp1D_data));
+    // Initialize mode_group_id to NULL (each mode in its own group by default)
+    data->mode_group_id = NULL;
     for(int i = 0; i < nmode; i++) {
         data->nmode[i] = moden[i];
         data->mmode[i] = modem[i];
@@ -91,6 +93,10 @@ void mhd_stat_free(mhd_stat_data* data) {
     free(data->phase_nm);
     free(data->omega_nm);
     free(data->amplitude_nm);
+    if (data->mode_group_id != NULL) {
+        free(data->mode_group_id);
+        data->mode_group_id = NULL;
+    }
 }
 
 /**
@@ -554,4 +560,44 @@ a5err mhd_stat_eval_potentials(real *alpha, real *phi, real psi, int mode,
     err += interp1Dcomp_eval_f(phi, &(mhddata->phi_nm[mode]), psi);
 
     return err;
+}
+
+/**
+ * @brief Update mode amplitudes and phases based on evolution rates.
+ *
+ * This function updates the mode amplitudes and phases in batch, providing
+ * better memory locality and performance compared to individual updates.
+ *
+ * @param data Pointer to MHD stat data structure.
+ * @param dA_dt Array of rate of change of amplitudes (input), size n_modes.
+ * @param dphi_dt Array of rate of change of phases (input), size n_modes.
+ * @param dt Time step.
+ * @param evolve_flags Array indicating which modes should be evolved (1=evolve, 0=fixed).
+ *                     If NULL, all modes are evolved. Size n_modes.
+ */
+void mhd_stat_update_amplitudes_phases(
+    mhd_stat_data* data,
+    real* dA_dt,
+    real* dphi_dt,
+    real dt,
+    int* evolve_flags) {
+    
+    if (data == NULL || dA_dt == NULL || dphi_dt == NULL) {
+        print_err("Error: Null pointer passed to mhd_stat_update_amplitudes_phases.\n");
+        return;
+    }
+    
+    // Update amplitudes and phases for each mode
+    for (int i = 0; i < data->n_modes; i++) {
+        // Check if this mode should be evolved
+        int should_evolve = (evolve_flags == NULL) ? 1 : evolve_flags[i];
+        
+        if (should_evolve) {
+            // Update amplitude: A_new = A_old + dA_dt * dt
+            data->amplitude_nm[i] += dA_dt[i] * dt;
+            
+            // Update phase: phi_new = phi_old + dphi_dt * dt
+            data->phase_nm[i] += dphi_dt[i] * dt;
+        }
+    }
 }

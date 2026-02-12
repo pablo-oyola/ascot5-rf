@@ -534,6 +534,54 @@ class LibAscot:
         return out["nmodes"], out["nmode"], out["mmode"], out["amplitude"],\
             out["omega"], out["phase"]
 
+    def mhd_update_amplitudes_phases(self, dA_dt, dphi_dt, dt, evolve_flags=None):
+        """Update MHD mode amplitudes and phases based on evolution rates.
+        
+        This function updates mode amplitudes and phases in batch after computing
+        evolution rates from particle-mode interactions.
+        
+        Parameters
+        ----------
+        dA_dt : array_like
+            Rate of change of amplitudes for each mode (size n_modes).
+        dphi_dt : array_like
+            Rate of change of phases for each mode (size n_modes).
+        dt : float
+            Time step in seconds.
+        evolve_flags : array_like, optional
+            Array indicating which modes should be evolved (1=evolve, 0=fixed).
+            If None, all modes are evolved. Size n_modes.
+        
+        Returns
+        -------
+        None
+        """
+        self._requireinit("mhd")
+        
+        # Get number of modes
+        fun_nmodes = _LIBASCOT.libascot_mhd_get_n_modes
+        fun_nmodes.restype = ctypes.c_int
+        fun_nmodes.argtypes = [PTR_SIM]
+        n_modes = fun_nmodes(ctypes.byref(self._sim))
+        dA_dt = np.asarray(dA_dt, dtype=np.float64)
+        dphi_dt = np.asarray(dphi_dt, dtype=np.float64)
+        
+        if len(dA_dt) != n_modes or len(dphi_dt) != n_modes:
+            raise ValueError(f"dA_dt and dphi_dt must have length {n_modes}")
+        
+        if evolve_flags is not None:
+            evolve_flags = np.asarray(evolve_flags, dtype=np.int32)
+            if len(evolve_flags) != n_modes:
+                raise ValueError(f"evolve_flags must have length {n_modes}")
+        
+        fun = _LIBASCOT.libascot_mhd_update_amplitudes_phases
+        fun.restype = None
+        fun.argtypes = [PTR_SIM, ctypes.c_int, PTR_REAL, PTR_REAL, 
+                        ctypes.c_double, PTR_INT]
+        
+        fun(ctypes.byref(self._sim), n_modes, dA_dt, dphi_dt, 
+            float(dt), evolve_flags)
+
     @parseunits(r="m", phi="rad", z="m", t="s")
     def _eval_rffields(self, r, phi, z, t):
         """Evaluate RF fields at given coordinates.

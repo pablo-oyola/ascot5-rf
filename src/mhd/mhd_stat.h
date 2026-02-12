@@ -34,6 +34,13 @@ typedef struct {
      * @brief 1D splines (rho) for each mode's electric eigenfunction
      */
     interp1D_data* phi_nm;
+    
+    /**
+     * @brief Mode group IDs for grouping modes that share amplitude/phase.
+     *        If NULL, each mode is in its own group (index equals group ID).
+     *        If set, modes with same group ID share the same amplitude/phase.
+     */
+    int* mode_group_id;
 } mhd_stat_data;
 
 int mhd_stat_init(mhd_stat_data* data, int nmode, int nrho,
@@ -61,6 +68,13 @@ a5err mhd_stat_eval_perturbations_dt(real pert_field[14], real r, real phi, real
                                      real t, int pertonly, int includemode,
                                      boozer_data* boozerdata, mhd_stat_data* mhddata,
                                      B_field_data* Bdata);
+
+void mhd_stat_update_amplitudes_phases(
+    mhd_stat_data* data,
+    real* dA_dt,
+    real* dphi_dt,
+    real dt,
+    int* evolve_flags);
 
 
 #endif

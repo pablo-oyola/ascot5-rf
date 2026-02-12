@@ -36,6 +36,11 @@ typedef struct {
     plasma_data* plasma_data; /** Plasma data for displacement */
     real thrmass; /** Mass of the thermal particle */
 
+    // Cached field values from previous step (for optimization)
+    // Stores Er, Ephi, Ez, dEr, dEphi, dEz for each particle and mode
+    // Shape: [n_modes * nprt * 6] - indexed as [j * nprt * 6 + i * 6 + field_idx]
+    real* cached_fields_i; /** Cached initial field values from previous step */
+
     // Internal variables.
     int enabled;
 

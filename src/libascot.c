@@ -656,6 +656,43 @@ void libascot_mhd_get_mode_specs(
 }
 
 /**
+ * @brief Update MHD mode amplitudes and phases based on evolution rates.
+ *
+ * This function updates mode amplitudes and phases in batch after computing
+ * evolution rates from particle-mode interactions. It provides better memory
+ * locality and performance compared to individual updates.
+ *
+ * @param sim simulation data struct
+ * @param n_modes number of modes to update
+ * @param dA_dt array of rate of change of amplitudes (input), size n_modes
+ * @param dphi_dt array of rate of change of phases (input), size n_modes
+ * @param dt time step
+ * @param evolve_flags array indicating which modes should be evolved (1=evolve, 0=fixed).
+ *                     If NULL, all modes are evolved. Size n_modes.
+ */
+void libascot_mhd_update_amplitudes_phases(
+    sim_data* sim, int n_modes, real* dA_dt, real* dphi_dt, real dt, int* evolve_flags) {
+    
+    if (sim == NULL || dA_dt == NULL || dphi_dt == NULL) {
+        return;
+    }
+    
+    // Check that MHD is initialized and is stationary type
+    if (sim->mhd_data.type != mhd_type_stat) {
+        return;
+    }
+    
+    // Verify n_modes matches the actual number of modes
+    int actual_n_modes = sim->mhd_data.stat.n_modes;
+    if (n_modes != actual_n_modes) {
+        return;
+    }
+    
+    // Call the mhd_stat function to perform the update
+    mhd_stat_update_amplitudes_phases(&sim->mhd_data.stat, dA_dt, dphi_dt, dt, evolve_flags);
+}
+
+/**
  * @brief Evaluate MHD perturbation potentials
  *
  * @param sim_data initialized simulation data struct

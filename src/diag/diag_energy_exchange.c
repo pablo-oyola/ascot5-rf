@@ -76,9 +76,12 @@ void diag_energy_exchange_init(diag_energy_exchange_data* data,
     data->S1 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->S2 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->dEnergy = (real*)malloc(data->n_modes * nprt * sizeof(real));
+    // Allocate memory for cached field values (Er, Ephi, Ez, dEr, dEphi, dEz = 6 values per particle per mode)
+    data->cached_fields_i = (real*)malloc(data->n_modes * nprt * 6 * sizeof(real));
     memset(data->S1, 0, data->n_modes * nprt * sizeof(real));
     memset(data->S2, 0, data->n_modes * nprt * sizeof(real));
     memset(data->dEnergy, 0, data->n_modes * nprt * sizeof(real));
+    memset(data->cached_fields_i, 0, data->n_modes * nprt * 6 * sizeof(real));
 
     // Finally we get from the plasma data the mass of the main ion species.
     data->thrmass = plasma_get_species_mass(plasma_data)[1];
@@ -99,6 +102,7 @@ void diag_energy_exchange_free(diag_energy_exchange_data* data) {
     if (data->S1) free(data->S1);
     if (data->S2) free(data->S2);
     if (data->dEnergy) free(data->dEnergy);
+    if (data->cached_fields_i) free(data->cached_fields_i);
     data->mhd_data = NULL;
     data->boozerdata = NULL;
     data->n_modes = 0;
@@ -118,14 +122,16 @@ void diag_energy_exchange_free(diag_energy_exchange_data* data) {
 void diag_energy_exchange_offload(diag_energy_exchange_data* data) {
     GPU_MAP_TO_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                     data->S2[0: data->n_modes * data->nprt], 
-                    data->dEnergy[0: data->n_modes * data->nprt]);
+                    data->dEnergy[0: data->n_modes * data->nprt],
+                    data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
 }
 
 
 void diag_energy_exchange_onload(diag_energy_exchange_data* data) {
     GPU_MAP_FROM_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                         data->S2[0: data->n_modes * data->nprt], 
-                        data->dEnergy[0: data->n_modes * data->nprt]);
+                        data->dEnergy[0: data->n_modes * data->nprt],
+                        data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
 
 }
 
@@ -200,10 +206,10 @@ void diag_energy_exchange_update_fo(diag_energy_exchange_data* data,
         real vA2_f = Babs2_f / (iondens_f * data->thrmass) * R2Bpol2_f;
         real vA2_i = Babs2_i / (iondens_i * data->thrmass) * R2Bpol2_i;
         
-        for (int j = 0; i < data->n_modes; i++) {
+        for (int j = 0; j < data->n_modes; j++) {
             if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
-            // 1. Getting the current electric field at the 
-            //    particle position.
+            
+            // Evaluate perturbations at final position
             mhd_stat_eval_perturbations_dt(pert_field, p_f->r[i], p_f->phi[i], 
                 p_f->z[i], p_f->time[i], 1, j, data->boozerdata, 
                 data->mhd_data, data->B_data);
@@ -214,15 +220,45 @@ void diag_energy_exchange_update_fo(diag_energy_exchange_data* data,
             dEphi_f = pert_field[11];
             dEz_f = pert_field[12];
 
-            mhd_stat_eval_perturbations_dt(pert_field, p_i->r[i], p_i->phi[i], 
-                p_i->z[i], p_i->time[i], 1, j, data->boozerdata, 
-                data->mhd_data, data->B_data);
-            Er_i = pert_field[3];
-            Ephi_i = pert_field[4];
-            Ez_i = pert_field[5];
-            dEr_i = pert_field[10];
-            dEphi_i = pert_field[11];
-            dEz_i = pert_field[12];
+            // Use cached initial field values if available (from previous step's final values)
+            // Cache index: [mode * nprt * 6 + particle_index * 6 + field_component]
+            int cache_idx = j * data->nprt * 6 + index * 6;
+            // Check if we have valid cached values (use a sentinel check: if first component is non-zero
+            // or if any component is non-zero, assume cache is valid. Zero fields are possible but rare.)
+            // More robust: check if time has advanced (particle moved) - if cached, use it
+            real cached_Er = data->cached_fields_i[cache_idx];
+            // Use cached values if they exist (non-zero check is heuristic - zero fields are rare)
+            // In practice, after first step, cache will contain previous final values
+            if (cached_Er != 0.0 || data->cached_fields_i[cache_idx + 1] != 0.0 || 
+                data->cached_fields_i[cache_idx + 2] != 0.0) {
+                // Use cached values from previous step's final position
+                Er_i = cached_Er;
+                Ephi_i = data->cached_fields_i[cache_idx + 1];
+                Ez_i = data->cached_fields_i[cache_idx + 2];
+                dEr_i = data->cached_fields_i[cache_idx + 3];
+                dEphi_i = data->cached_fields_i[cache_idx + 4];
+                dEz_i = data->cached_fields_i[cache_idx + 5];
+            } else {
+                // First evaluation for this particle - compute initial position fields
+                mhd_stat_eval_perturbations_dt(pert_field, p_i->r[i], p_i->phi[i], 
+                    p_i->z[i], p_i->time[i], 1, j, data->boozerdata, 
+                    data->mhd_data, data->B_data);
+                Er_i = pert_field[3];
+                Ephi_i = pert_field[4];
+                Ez_i = pert_field[5];
+                dEr_i = pert_field[10];
+                dEphi_i = pert_field[11];
+                dEz_i = pert_field[12];
+            }
+            
+            // Cache final position values for next step (they become initial for next iteration)
+            // This reduces field evaluations by ~2x after the first step
+            data->cached_fields_i[cache_idx] = Er_f;
+            data->cached_fields_i[cache_idx + 1] = Ephi_f;
+            data->cached_fields_i[cache_idx + 2] = Ez_f;
+            data->cached_fields_i[cache_idx + 3] = dEr_f;
+            data->cached_fields_i[cache_idx + 4] = dEphi_f;
+            data->cached_fields_i[cache_idx + 5] = dEz_f;
             
             real Edotv_f = Er_f * p_f->p_r[i] + Ephi_f * p_f->p_phi[i] + Ez_f * p_f->p_z[i];
             real Edotv_i = Er_i * p_i->p_r[i] + Ephi_i * p_i->p_phi[i] + Ez_i * p_i->p_z[i];
@@ -322,7 +358,9 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
         real mhd_dmhd[10];
         for (int j = 0; j < data->n_modes; j++) {
             if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
-            // Getting the mode data.
+            // Getting the mode data at final position.
+            // TODO: Optimization opportunity - could evaluate at initial position as well
+            // and use midpoint rule, or cache initial values from previous step
             mhd_stat_eval(mhd_dmhd, p_f->r[i], p_f->phi[i], 
                           p_f->z[i], p_f->time[i], j, data->boozerdata, 
                           data->mhd_data, data->B_data);
@@ -386,10 +424,12 @@ void diag_energy_exchange_compact(diag_energy_exchange_data* data,
     }
     
     // If clear is true, we reset the source terms to zero.
+    // Also clear cached fields when resetting (they'll be recomputed on next step)
     if (clear) {
         memset(data->S1, 0, data->n_modes * data->nprt * sizeof(real));
         memset(data->S2, 0, data->n_modes * data->nprt * sizeof(real));
         memset(data->dEnergy, 0, data->n_modes * data->nprt * sizeof(real));
+        memset(data->cached_fields_i, 0, data->n_modes * data->nprt * 6 * sizeof(real));
     }
 
 }
@@ -409,24 +449,29 @@ void diag_energy_exchange_update_nprt(diag_energy_exchange_data* data,
     // Removing the data from the GPU.
     GPU_MAP_DELETE_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                           data->S2[0: data->n_modes * data->nprt], 
-                          data->dEnergy[0: data->n_modes * data->nprt]);
+                          data->dEnergy[0: data->n_modes * data->nprt],
+                          data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
 
     // Free the previous source terms and reallocate for the new number of particles
     free(data->S1);
     free(data->S2);
     free(data->dEnergy);
+    free(data->cached_fields_i);
 
     data->nprt = nprt;
     data->S1 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->S2 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->dEnergy = (real*)malloc(data->n_modes * nprt * sizeof(real));
+    data->cached_fields_i = (real*)malloc(data->n_modes * nprt * 6 * sizeof(real));
     
     memset(data->S1, 0, data->n_modes * nprt * sizeof(real));
     memset(data->S2, 0, data->n_modes * nprt * sizeof(real));
     memset(data->dEnergy, 0, data->n_modes * nprt * sizeof(real));
+    memset(data->cached_fields_i, 0, data->n_modes * nprt * 6 * sizeof(real));
 
     // Offloading the data to the GPU again.
     GPU_MAP_TO_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                       data->S2[0: data->n_modes * data->nprt], 
-                      data->dEnergy[0: data->n_modes * data->nprt]);
+                      data->dEnergy[0: data->n_modes * data->nprt],
+                      data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
 }
