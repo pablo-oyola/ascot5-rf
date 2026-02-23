@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# TARGET arch is: ['-I/home/pablooyola/.anaconda3/envs/ascot-dev-2/include/', '-I/home/pablooyola/.anaconda3/envs/ascot-dev-2/x86_64-conda-linux-gnu/sysroot/usr/include/', '-I/home/pablooyola/.anaconda3/envs/ascot-dev-2/lib/clang/15.0.7/include/']
+# TARGET arch is: ['-I/home/pablooyola/.anaconda3/envs/ascot/include/', '-I/home/pablooyola/.anaconda3/envs/ascot/x86_64-conda-linux-gnu/sysroot/usr/include/', '-I/home/pablooyola/.anaconda3/envs/ascot/lib/clang/15.0.7/include/']
 # WORD_SIZE is: 8
 # POINTER_SIZE is: 8
 # LONGDOUBLE_SIZE is: 16
@@ -1779,6 +1779,7 @@ struct_c__SA_mhd_stat_data._fields_ = [
     ('phase_nm', ctypes.POINTER(ctypes.c_double)),
     ('alpha_nm', ctypes.POINTER(struct_c__SA_interp1D_data)),
     ('phi_nm', ctypes.POINTER(struct_c__SA_interp1D_data)),
+    ('mode_group_id', ctypes.POINTER(ctypes.c_int32)),
 ]
 
 mhd_stat_data = struct_c__SA_mhd_stat_data
@@ -1822,6 +1823,12 @@ try:
     mhd_stat_eval_perturbations_dt = _libraries['libascot.so'].mhd_stat_eval_perturbations_dt
     mhd_stat_eval_perturbations_dt.restype = a5err
     mhd_stat_eval_perturbations_dt.argtypes = [ctypes.c_double * 14, real, real, real, real, ctypes.c_int32, ctypes.c_int32, ctypes.POINTER(struct_c__SA_boozer_data), ctypes.POINTER(struct_c__SA_mhd_stat_data), ctypes.POINTER(struct_c__SA_B_field_data)]
+except AttributeError:
+    pass
+try:
+    mhd_stat_update_amplitudes_phases = _libraries['libascot.so'].mhd_stat_update_amplitudes_phases
+    mhd_stat_update_amplitudes_phases.restype = None
+    mhd_stat_update_amplitudes_phases.argtypes = [ctypes.POINTER(struct_c__SA_mhd_stat_data), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double), real, ctypes.POINTER(ctypes.c_int32)]
 except AttributeError:
     pass
 class struct_c__SA_mhd_nonstat_data(Structure):
@@ -2215,6 +2222,7 @@ struct_c__SA_diag_energy_exchange_data._fields_ = [
     ('B_data', ctypes.POINTER(struct_c__SA_B_field_data)),
     ('plasma_data', ctypes.POINTER(struct_c__SA_plasma_data)),
     ('thrmass', ctypes.c_double),
+    ('cached_fields_i', ctypes.POINTER(ctypes.c_double)),
     ('enabled', ctypes.c_int32),
     ('PADDING_0', ctypes.c_ubyte * 4),
 ]
@@ -2374,6 +2382,12 @@ try:
     mpi_gather_diag = _libraries['libascot.so'].mpi_gather_diag
     mpi_gather_diag.restype = None
     mpi_gather_diag.argtypes = [ctypes.POINTER(struct_c__SA_diag_data), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32]
+except AttributeError:
+    pass
+try:
+    mpi_gather_histogram_by_pieces = _libraries['libascot.so'].mpi_gather_histogram_by_pieces
+    mpi_gather_histogram_by_pieces.restype = None
+    mpi_gather_histogram_by_pieces.argtypes = [ctypes.POINTER(None), ctypes.c_int32, size_t]
 except AttributeError:
     pass
 class struct_c__SA_N0_1D_data(Structure):
@@ -2977,6 +2991,12 @@ try:
 except AttributeError:
     pass
 try:
+    RF2D_fields_scale_amplitude = _libraries['libascot.so'].RF2D_fields_scale_amplitude
+    RF2D_fields_scale_amplitude.restype = None
+    RF2D_fields_scale_amplitude.argtypes = [ctypes.POINTER(struct_RF2D_fields), real]
+except AttributeError:
+    pass
+try:
     RF2D_field_eval = _libraries['libascot.so'].RF2D_field_eval
     RF2D_field_eval.restype = a5err
     RF2D_field_eval.argtypes = [ctypes.c_double * 3, ctypes.c_double * 3, real, real, real, real, ctypes.POINTER(struct_RF2D_fields)]
@@ -3030,6 +3050,12 @@ try:
     RF3D_fields_offload = _libraries['libascot.so'].RF3D_fields_offload
     RF3D_fields_offload.restype = None
     RF3D_fields_offload.argtypes = [ctypes.POINTER(struct_RF3D_fields)]
+except AttributeError:
+    pass
+try:
+    RF3D_fields_scale_amplitude = _libraries['libascot.so'].RF3D_fields_scale_amplitude
+    RF3D_fields_scale_amplitude.restype = None
+    RF3D_fields_scale_amplitude.argtypes = [ctypes.POINTER(struct_RF3D_fields), real]
 except AttributeError:
     pass
 try:
@@ -3139,6 +3165,12 @@ try:
 except AttributeError:
     pass
 try:
+    RF2D_gc_stix_scale_amplitude = _libraries['libascot.so'].RF2D_gc_stix_scale_amplitude
+    RF2D_gc_stix_scale_amplitude.restype = None
+    RF2D_gc_stix_scale_amplitude.argtypes = [ctypes.POINTER(struct_RF2D_gc_stix), real]
+except AttributeError:
+    pass
+try:
     guess_qm = _libraries['libascot.so'].guess_qm
     guess_qm.restype = real
     guess_qm.argtypes = [ctypes.POINTER(struct_c__SA_particle_queue)]
@@ -3226,6 +3258,12 @@ try:
     RF_fields_offload = _libraries['libascot.so'].RF_fields_offload
     RF_fields_offload.restype = None
     RF_fields_offload.argtypes = [ctypes.POINTER(struct_RF_fields)]
+except AttributeError:
+    pass
+try:
+    RF_fields_scale_amplitude = _libraries['libascot.so'].RF_fields_scale_amplitude
+    RF_fields_scale_amplitude.restype = None
+    RF_fields_scale_amplitude.argtypes = [ctypes.POINTER(struct_RF_fields), real]
 except AttributeError:
     pass
 try:
@@ -3402,6 +3440,12 @@ try:
     endcond_parse2str = _libraries['libascot.so'].endcond_parse2str
     endcond_parse2str.restype = None
     endcond_parse2str.argtypes = [ctypes.c_int32, ctypes.POINTER(ctypes.c_char)]
+except AttributeError:
+    pass
+try:
+    flr_losses_eval = _libraries['libascot.so'].flr_losses_eval
+    flr_losses_eval.restype = ctypes.c_int32
+    flr_losses_eval.argtypes = [real, real, real, real, real, real, real, real, ctypes.POINTER(struct_c__SA_B_field_data), ctypes.POINTER(struct_c__SA_wall_data), ctypes.POINTER(ctypes.POINTER(None)), ctypes.POINTER(ctypes.c_int32), ctypes.POINTER(ctypes.c_int32)]
 except AttributeError:
     pass
 
@@ -3646,35 +3690,37 @@ __all__ = \
     'RF2D_GC_STIX', 'RF2D_field_eval', 'RF2D_fields',
     'RF2D_fields_free', 'RF2D_fields_init',
     'RF2D_fields_init_from_file', 'RF2D_fields_offload',
-    'RF2D_gc_stix', 'RF2D_gc_stix_compute_cold_resonances',
+    'RF2D_fields_scale_amplitude', 'RF2D_gc_stix',
+    'RF2D_gc_stix_compute_cold_resonances',
     'RF2D_gc_stix_eval_fields', 'RF2D_gc_stix_free',
     'RF2D_gc_stix_get_interaction_time', 'RF2D_gc_stix_init',
     'RF2D_gc_stix_init_from_file', 'RF2D_gc_stix_offload',
-    'RF2D_gc_stix_scatter', 'RF3D_field_eval', 'RF3D_fields',
-    'RF3D_fields_free', 'RF3D_fields_init',
-    'RF3D_fields_init_from_file', 'RF3D_fields_offload',
+    'RF2D_gc_stix_scale_amplitude', 'RF2D_gc_stix_scatter',
+    'RF3D_field_eval', 'RF3D_fields', 'RF3D_fields_free',
+    'RF3D_fields_init', 'RF3D_fields_init_from_file',
+    'RF3D_fields_offload', 'RF3D_fields_scale_amplitude',
     'RF_FULL_ORBIT_2D', 'RF_FULL_ORBIT_3D', 'RF_NONE', 'RF_fields',
     'RF_fields_eval', 'RF_fields_free', 'RF_fields_init',
-    'RF_fields_offload', 'RF_particle_eval_nkicks',
-    'RF_particle_history', 'RF_particle_history_free',
-    'RF_particle_history_init', 'RF_particle_history_update',
-    'RF_type', 'Reaction', 'SIMULATION_MODE', 'a5err', 'afsi_data',
-    'afsi_run', 'afsi_test_dist', 'afsi_test_thermal',
-    'afsi_thermal_data', 'asigma_data', 'asigma_eval_bms',
-    'asigma_eval_cx', 'asigma_eval_sigma', 'asigma_eval_sigmav',
-    'asigma_extrapolate', 'asigma_free', 'asigma_loc_data',
-    'asigma_loc_eval_bms', 'asigma_loc_eval_cx',
-    'asigma_loc_eval_sigma', 'asigma_loc_eval_sigmav',
-    'asigma_loc_free', 'asigma_loc_init', 'asigma_loc_offload',
-    'asigma_offload', 'asigma_reac_type', 'asigma_type',
-    'asigma_type_loc', 'bbnbi_simulate', 'biosaw_calc_B',
-    'boozer_data', 'boozer_eval_psithetazeta', 'boozer_free',
-    'boozer_init', 'boozer_offload', 'boschhale_reaction',
-    'boschhale_sigma', 'boschhale_sigmav', 'diag_data',
-    'diag_energy_exchange_compact', 'diag_energy_exchange_data',
-    'diag_energy_exchange_free', 'diag_energy_exchange_init',
-    'diag_energy_exchange_offload', 'diag_energy_exchange_onload',
-    'diag_energy_exchange_update_fo',
+    'RF_fields_offload', 'RF_fields_scale_amplitude',
+    'RF_particle_eval_nkicks', 'RF_particle_history',
+    'RF_particle_history_free', 'RF_particle_history_init',
+    'RF_particle_history_update', 'RF_type', 'Reaction',
+    'SIMULATION_MODE', 'a5err', 'afsi_data', 'afsi_run',
+    'afsi_test_dist', 'afsi_test_thermal', 'afsi_thermal_data',
+    'asigma_data', 'asigma_eval_bms', 'asigma_eval_cx',
+    'asigma_eval_sigma', 'asigma_eval_sigmav', 'asigma_extrapolate',
+    'asigma_free', 'asigma_loc_data', 'asigma_loc_eval_bms',
+    'asigma_loc_eval_cx', 'asigma_loc_eval_sigma',
+    'asigma_loc_eval_sigmav', 'asigma_loc_free', 'asigma_loc_init',
+    'asigma_loc_offload', 'asigma_offload', 'asigma_reac_type',
+    'asigma_type', 'asigma_type_loc', 'bbnbi_simulate',
+    'biosaw_calc_B', 'boozer_data', 'boozer_eval_psithetazeta',
+    'boozer_free', 'boozer_init', 'boozer_offload',
+    'boschhale_reaction', 'boschhale_sigma', 'boschhale_sigmav',
+    'diag_data', 'diag_energy_exchange_compact',
+    'diag_energy_exchange_data', 'diag_energy_exchange_free',
+    'diag_energy_exchange_init', 'diag_energy_exchange_offload',
+    'diag_energy_exchange_onload', 'diag_energy_exchange_update_fo',
     'diag_energy_exchange_update_gc',
     'diag_energy_exchange_update_nprt', 'diag_free', 'diag_init',
     'diag_offload', 'diag_onload', 'diag_orb_check_plane_crossing',
@@ -3703,11 +3749,11 @@ __all__ = \
     'endcond_neutr', 'endcond_parse', 'endcond_parse2str',
     'endcond_polmax', 'endcond_rhomax', 'endcond_rhomin',
     'endcond_therm', 'endcond_tlim', 'endcond_tormax', 'endcond_wall',
-    'guess_qm', 'hdf5_generate_qid', 'hdf5_input_RF',
-    'hdf5_input_asigma', 'hdf5_input_bfield', 'hdf5_input_boozer',
-    'hdf5_input_efield', 'hdf5_input_marker', 'hdf5_input_mhd',
-    'hdf5_input_nbi', 'hdf5_input_neutral', 'hdf5_input_options',
-    'hdf5_input_plasma', 'hdf5_input_wall',
+    'flr_losses_eval', 'guess_qm', 'hdf5_generate_qid',
+    'hdf5_input_RF', 'hdf5_input_asigma', 'hdf5_input_bfield',
+    'hdf5_input_boozer', 'hdf5_input_efield', 'hdf5_input_marker',
+    'hdf5_input_mhd', 'hdf5_input_nbi', 'hdf5_input_neutral',
+    'hdf5_input_options', 'hdf5_input_plasma', 'hdf5_input_wall',
     'hdf5_interface_init_results', 'hdf5_interface_read_input',
     'hdf5_interface_write_diagnostics', 'hdf5_interface_write_state',
     'hid_t', 'input_group', 'input_particle', 'input_particle_type',
@@ -3724,18 +3770,20 @@ __all__ = \
     'mhd_stat_data', 'mhd_stat_eval',
     'mhd_stat_eval_perturbations_dt', 'mhd_stat_eval_potentials',
     'mhd_stat_free', 'mhd_stat_init', 'mhd_stat_offload',
-    'mhd_stat_perturbations', 'mhd_type', 'mhd_type_nonstat',
-    'mhd_type_stat', 'mpi_gather_diag', 'mpi_gather_particlestate',
-    'mpi_interface_barrier', 'mpi_interface_finalize',
-    'mpi_interface_init', 'mpi_my_particles', 'nbi_data', 'nbi_free',
-    'nbi_init', 'nbi_inject', 'nbi_injector', 'neutral_data',
-    'neutral_eval_n0', 'neutral_eval_t0', 'neutral_free',
-    'neutral_get_n_species', 'neutral_offload', 'neutral_type',
-    'neutral_type_1D', 'neutral_type_3D', 'offload_and_simulate',
-    'particle', 'particle_allocate_fo', 'particle_copy_fo',
-    'particle_copy_gc', 'particle_copy_ml', 'particle_cycle_fo',
-    'particle_cycle_gc', 'particle_cycle_ml', 'particle_fo_to_gc',
-    'particle_fo_to_state', 'particle_gc', 'particle_gc_to_state',
+    'mhd_stat_perturbations', 'mhd_stat_update_amplitudes_phases',
+    'mhd_type', 'mhd_type_nonstat', 'mhd_type_stat',
+    'mpi_gather_diag', 'mpi_gather_histogram_by_pieces',
+    'mpi_gather_particlestate', 'mpi_interface_barrier',
+    'mpi_interface_finalize', 'mpi_interface_init',
+    'mpi_my_particles', 'nbi_data', 'nbi_free', 'nbi_init',
+    'nbi_inject', 'nbi_injector', 'neutral_data', 'neutral_eval_n0',
+    'neutral_eval_t0', 'neutral_free', 'neutral_get_n_species',
+    'neutral_offload', 'neutral_type', 'neutral_type_1D',
+    'neutral_type_3D', 'offload_and_simulate', 'particle',
+    'particle_allocate_fo', 'particle_copy_fo', 'particle_copy_gc',
+    'particle_copy_ml', 'particle_cycle_fo', 'particle_cycle_gc',
+    'particle_cycle_ml', 'particle_fo_to_gc', 'particle_fo_to_state',
+    'particle_gc', 'particle_gc_to_state',
     'particle_input_gc_to_state', 'particle_input_ml_to_state',
     'particle_input_p_to_state', 'particle_input_to_state',
     'particle_ml', 'particle_ml_to_state', 'particle_offload_fo',
