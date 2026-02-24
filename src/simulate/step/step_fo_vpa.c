@@ -25,20 +25,20 @@
  * 
  * Selects among the different solver functions available.
  * 
- * @param solver string with the name of the solver
+ * @param solver integer with the solver number
  * @return void
  */
-void set_push_function(push_fo_fnt** ptr, char* solver) {
-    if(strcmp(solver, "VPA") == 0) {
-        **ptr = &step_fo_vpa;
-    } else if(strcmp(solver, "VPA PHASE CORRECTED") == 0) {
-        **ptr = &step_fo_vpa_full;
-    } else if(strcmp(solver, "BORIS LEAP FROG") == 0) {
-        **ptr = &step_fo_vpa_borisA;
-    } else if(strcmp(solver, "VPA 4TH ORDER") == 0) {
-        **ptr = &step_fo_vpa_4th;
+void set_push_function(int solver) {
+    if(solver == 0) {
+        full_orbit_pusher = &step_fo_vpa;
+    } else if(solver == 1) {
+        full_orbit_pusher = &step_fo_vpa_full;
+    } else if(solver == 2) {
+        full_orbit_pusher = &step_fo_vpa_borisA;
+    } else if(solver == 3) {
+        full_orbit_pusher = &step_fo_vpa_4th;
     } else {
-        **ptr = &step_fo_vpa_full;
+        full_orbit_pusher = &step_fo_vpa_full;
     }
 }
 

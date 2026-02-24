@@ -44,6 +44,7 @@ class Opt(DataGroup):
         self._OPT_SIM_MODE                   = 2
         self._OPT_ENABLE_ADAPTIVE            = 1
         self._OPT_RECORD_MODE                = 0
+        self._OPT_FULL_ORBIT_SOLVER          = 1
         self._OPT_FIXEDSTEP_USE_USERDEFINED  = 0
         self._OPT_FIXEDSTEP_USERDEFINED      = 1.0e-8
         self._OPT_FIXEDSTEP_GYRODEFINED      = 20
@@ -165,6 +166,18 @@ class Opt(DataGroup):
         - 1 Use adaptive time-step
         """
         return self._OPT_ENABLE_ADAPTIVE
+    
+    @property
+    def _FULL_ORBIT_SOLVER(self):
+        """
+        Sets the full-orbit solver to be used.
+
+        - 0 Volume-Preserving without phase correction
+        - 1 Volume-Preserving with phase correction
+        - 2 Non-relativistic Boris leap-frog without phase correction
+        - 3 Volume-Preserving 4th order with phase correction
+        """
+        return self._OPT_FULL_ORBIT_SOLVER
 
     @property
     def _RECORD_MODE(self):
@@ -918,10 +931,6 @@ class Opt(DataGroup):
 
         for o in defopt.keys():
             if o not in out:
-                # if o == 'ENABLE_ENERGY_TRANSFER_DIAG':
-                #     out['ENABLE_ENERGY_TRANSFER_DIAG'] = 0
-                # else:
-                #     raise ValueError("Missing parameter: " + o)
                 out[o] = defopt[o]
                 print(f"Warning: Missing parameter {o} set to default: {defopt[o]}")
 
@@ -1352,6 +1361,13 @@ class Opt(DataGroup):
                     <xs:maxInclusive value="4"/>
                     </xs:restriction>
                 </xs:simpleType>
+                              
+                <xs:simpleType name="Integer0to3">'">
+                    <xs:restriction base="xs:integer">
+                    <xs:minInclusive value="0"/>
+                    <xs:maxInclusive value="3"/>
+                    </xs:restriction>
+                </xs:simpleType>
 
                 <xs:simpleType name="FloatPositive">
                     <xs:restriction base="xs:float">
@@ -1416,6 +1432,7 @@ class Opt(DataGroup):
                 </xs:element>
             {doc('SIM_MODE',                  'Integer1234')}
             {doc('ENABLE_ADAPTIVE',           'IntegerBinary')}
+            {doc('FULL_ORBIT_SOLVER',         'Integer0to3')}
             {doc('FIXEDSTEP_USE_USERDEFINED', 'IntegerBinary')}
             {doc('FIXEDSTEP_USERDEFINED',     'FloatPositive')}
             {doc('FIXEDSTEP_GYRODEFINED',     'IntegerPositive')}
