@@ -216,6 +216,16 @@ class PoincareTemplates():
         psi0 = d["psi0"]
         psi1 = d["psi1"]
 
+        try:
+            psi0 = float(psi0)
+        except TypeError:
+            psi0 = float(psi0.item())
+        
+        try:
+            psi1 = float(psi1)
+        except TypeError:
+            psi1 = float(psi1.item())
+
         # ...and this poloidal grid to evaluate values along the contour
         thgrid = np.linspace(0, 2*np.pi, nint)
 
