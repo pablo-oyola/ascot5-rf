@@ -16,9 +16,12 @@
 #include "../../boozer.h"
 #include "../../mhd.h"
 #include "../../particle.h"
+#include "../../print.h"
 #include "../../icrh/RFlib.h"
 #include "step_fo_vpa.h"
 #include <string.h>
+
+push_fo_fnt full_orbit_pusher = step_fo_vpa_full;
 
 /**
  * @brief Set the function to push the particles
@@ -26,19 +29,23 @@
  * Selects among the different solver functions available.
  * 
  * @param solver integer with the solver number
- * @return void
  */
-void set_push_function(int solver) {
-    if(solver == 0) {
-        full_orbit_pusher = &step_fo_vpa;
-    } else if(solver == 1) {
-        full_orbit_pusher = &step_fo_vpa_full;
-    } else if(solver == 2) {
-        full_orbit_pusher = &step_fo_vpa_borisA;
-    } else if(solver == 3) {
-        full_orbit_pusher = &step_fo_vpa_4th;
+void set_push_function(full_orbit_solver_type solver) {
+    if(solver == VPA_APPROX) {
+        full_orbit_pusher = step_fo_vpa;
+        print_err("Using approximated relativistic VPA (Option 0)\n");
+    } else if(solver == VPA_FULL) {
+        full_orbit_pusher = step_fo_vpa_full;
+        print_err("Using phase-corrected relativistic VPA (Option 1)\n");
+    } else if(solver == VPA_BORISA) {
+        full_orbit_pusher = step_fo_vpa_borisA;
+        print_err("Using Boris-A relativistic VPA (Option 2)");
+    } else if(solver == VPA_4TH) {
+        full_orbit_pusher = step_fo_vpa_4th;
+        print_err("Using 4th order relativistic VPA (Option 3)\n");
     } else {
-        full_orbit_pusher = &step_fo_vpa_full;
+        full_orbit_pusher = step_fo_vpa_full;
+        print_err("Invalid solver option, using phase-corrected relativistic VPA (Option 1)\n");
     }
 }
 

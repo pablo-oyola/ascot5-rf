@@ -194,6 +194,11 @@ class LibSimulate():
         dist.max_q     = opt["DIST_MAX_CHARGE"]
         dist.n_q       = opt["DIST_NBIN_CHARGE"]
 
+        # We need to set up the pusher function pointer in the 
+        # C code using the "FULL_ORBIT_SOLVER" option.
+        if opt["SIM_MODE"] == ascot2py.simulate_mode_fo and 'FULL_ORBIT_SOLVER' in opt:
+            self.full_orbit_set_pusher(opt["FULL_ORBIT_SOLVER"])
+
     def simulation_initinputs(self, bfield=True, efield=True, plasma=True,
                               neutral=True, wall=True, boozer=True, mhd=True,
                               asigma=True, switch=True, RF=True):

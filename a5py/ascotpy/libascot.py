@@ -1205,3 +1205,22 @@ class LibAscot:
                "charge": charge}
         
         return out
+
+    def full_orbit_set_pusher(self, integrator_type: int):
+        """
+        Set the full orbit pusher algorithm.
+
+        Parameters
+        ----------
+        integrator_type : int
+            Integrator type to be used for full orbit pushing. See
+            ascot2py.full_orbit_solver_type__enumvalues for possible values.
+        """
+        if _LIBASCOT is None:
+            raise RuntimeError("libascot.so is not loaded. Cannot set full orbit pusher.")
+        fun = _LIBASCOT.set_push_function
+        fun.restype  = None
+        fun.argtypes = [ctypes.c_int]
+        fun(integrator_type)
+
+        

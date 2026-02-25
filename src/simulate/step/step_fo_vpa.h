@@ -11,8 +11,15 @@
 #include "../../particle.h"
 #include "../../icrh/RFlib.h"
 
+typedef enum {
+    VPA_APPROX = 0, /**< Approximated relativistic VPA, without phase correction */
+    VPA_FULL   = 1, /**< Phase-corrected relativistic VPA */
+    VPA_BORISA = 2, /**< Boris-A relativistic VPA */
+    VPA_4TH    = 3, /**< 4th order relativistic VPA */
+} full_orbit_solver_type;
+
 // Setting the solver.
-void set_push_function(int solver);
+void set_push_function(full_orbit_solver_type solver);
 
 // 2nd order integrators, without phase correction.
 void step_fo_vpa(particle_simd_fo* p, real* h, B_field_data* Bdata,
@@ -33,14 +40,14 @@ void step_fo_vpa_4th(particle_simd_fo* p, real* h, B_field_data* Bdata,
 
 
 // Defining the a type that describes a generic function to push the particles.
-typedef void (*push_fo_fnt)(particle_simd_fo*, real*, B_field_data*, 
-                            E_field_data*, RF_fields*);
+typedef void (*push_fo_fnt)(particle_simd_fo*, real* , B_field_data*,
+                            E_field_data* , RF_fields* );
 
 // This is the function pointer that will be set to the desired solver.
 // It defaults to the VPA phase corrected solver, which is the most 
 // accurate one, and the one we want to use in our convergence tests. 
 // The user can change it by setting the FULL_ORBIT_SOLVER option in the input file.
-push_fo_fnt* full_orbit_pusher = step_fo_vpa_full;
+extern push_fo_fnt full_orbit_pusher;
 
 
 #endif
