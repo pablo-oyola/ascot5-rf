@@ -10,6 +10,7 @@ from a5py.ascotpy.libascot import _LIBASCOT, STRUCT_DIST5D, STRUCT_AFSIDATA, \
     STRUCT_AFSITHERMAL, PTR_REAL, AFSI_REACTIONS
 from a5py.exceptions import AscotNoDataException
 from a5py.routines.distmixin import DistMixin
+from a5py.ascot5io.dist import DistData
 
 class Afsi():
     """ASCOT Fusion Source Integrator AFSI.
@@ -128,11 +129,11 @@ class Afsi():
             for i in range(nr):
                 for k in range(nz):
                     temp[i,j,k]  = self._ascot.input_eval(
-                        r[i], phi[j], z[k], time, "ti1").to("J")
+                        r[i], phi[j], z[k], time, "ti1").to("J").item()
                     dens1[i,j,k] = self._ascot.input_eval(
-                        r[i], phi[j], z[k], time, "ni"+str(ispecies1))
+                        r[i], phi[j], z[k], time, "ni"+str(ispecies1)).to('m**(-3)').item()
                     dens2[i,j,k] = self._ascot.input_eval(
-                        r[i], phi[j], z[k], time,"ni"+str(ispecies2))
+                        r[i], phi[j], z[k], time,"ni"+str(ispecies2)).to('m**(-3)').item()
 
         thermal1 = self._init_thermal_data(
             minr, maxr, nr, minphi, maxphi, nphi, minz, maxz, nz, temp, dens1)
@@ -251,9 +252,9 @@ class Afsi():
             for i in range(nr):
                 for k in range(nz):
                     temp[i,j,k] = self._ascot.input_eval(
-                        r[i], phi[j], z[k], time, "ti1").to("J")
+                        r[i], phi[j], z[k], time, "ti1").to("J").item()
                     dens[i,j,k] = self._ascot.input_eval(
-                        r[i], phi[j], z[k], time, "ni"+str(ispecies))
+                        r[i], phi[j], z[k], time, "ni"+str(ispecies)).to('m**(-3)').item()
 
         thermal = self._init_thermal_data(
             minr, maxr, nr, minphi, maxphi, nphi, minz, maxz, nz, temp, dens)
@@ -351,6 +352,49 @@ class Afsi():
         self._ascot.file_load(self._ascot.file_getpath())
         return prod1, prod2
 
+    def _build_distdata(self, prod):
+        """
+        Transform the raw histogram data into a DistData object.
+
+        Parameters
+        ----------
+        prod : STRUCT_HIST
+            Histogram structure containing the raw data.
+        """
+        # We get the numpy representation of the data.
+        data = np.array(prod.bins[0:prod.nbin], dtype='f8')
+
+        # Then we get the sizes.
+        sizes = []
+        names = []
+        boundaries = []
+        units = {'r': unyt.m, 'phi': unyt.rad, 'z': unyt.m,
+                 'rho': unyt.dimensionless, 'theta': unyt.rad,
+                 'ppar': unyt.kg * unyt.m / unyt.s,
+                 'pperp': unyt.kg * unyt.m / unyt.s,
+                 'ekin': unyt.J, 'xi': unyt.dimensionless,
+                 'pr': unyt.kg * unyt.m / unyt.s,
+                 'pz': unyt.kg * unyt.m / unyt.s,
+                 'pphi': unyt.kg * unyt.m / unyt.s,
+                 'mu': unyt.J / unyt.T,
+                 'ptor': unyt.C * unyt.Wb,
+                 'time': unyt.s, 'charge': unyt.e}
+        for i in range(len(hist_coordinate__enumvalues)):
+            if prod.axes[i].n > 0:
+                sizes.append(prod.axes[i].n)
+                names.append(hist_coordinate__enumvalues[i].lower())
+                edges = np.linspace(
+                    prod.axes[i].min, prod.axes[i].max, prod.axes[i].n + 1)
+                boundaries.append(edges)
+        
+        abscissae = dict()
+        for ii in range(len(sizes)):
+            abscissae[names[ii]] = boundaries[ii] * units[names[ii]]
+        
+        data = data.reshape(sizes, order='C')
+        return DistData(data, **abscissae)
+
+
     def _init_afsi_data(self, dist_5D=None, dist_thermal=None):
         afsidata = STRUCT_AFSIDATA()
         if dist_5D is not None:
@@ -439,6 +483,10 @@ class Afsi():
         prod.min_time  = react.min_time
         prod.max_time  = react.max_time
         prod.n_q       = 1
+        try:
+            charge = int(charge)
+        except TypeError:
+            charge = charge.item()
         prod.min_q     = charge - 1
         prod.max_q     = charge + 1
 
