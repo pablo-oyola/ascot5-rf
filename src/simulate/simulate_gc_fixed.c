@@ -277,8 +277,11 @@ void fill_random_values(random_data* random_data, uint8* used, real* rnd, int si
         if (used[i] == 0) count++;
     }
 
+    if(count <= 0) return;
+
     // We create temporal array to store the random values.
     real* temp_rnd = (real*) malloc(count * sizeof(real));
+    if(temp_rnd == NULL) return;
     random_uniform_simd(random_data, count, temp_rnd);
 
     // Filling the random values.
