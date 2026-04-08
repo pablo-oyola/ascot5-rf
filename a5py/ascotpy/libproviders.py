@@ -591,8 +591,8 @@ class LibProviders():
              (kwargs["charge"].flatten() * unyt.elementary_charge).to("C")
             )
         _LIBASCOT.plasma_1D_init(
-            ctypes.byref(self._sim.plasma_data.plasma_1D), int(kwargs["nrho"]),
-            int(kwargs["nion"]), kwargs["rho"].ctypes.data_as(PTR_ARR),
+            ctypes.byref(self._sim.plasma_data.plasma_1D), int(kwargs["nrho"].item()),
+            int(kwargs["nion"].item()), kwargs["rho"].ctypes.data_as(PTR_ARR),
             kwargs["anum"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
             kwargs["anum"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
             mass.ctypes.data_as(PTR_ARR), charge.ctypes.data_as(PTR_ARR),
@@ -616,7 +616,7 @@ class LibProviders():
              (kwargs["charge"].flatten() * unyt.elementary_charge).to("C")
             )
         _LIBASCOT.plasma_1DS_init(
-            ctypes.byref(self._sim.plasma_data.plasma_1DS), int(kwargs["nrho"]),
+            ctypes.byref(self._sim.plasma_data.plasma_1DS), int(kwargs["nrho"].item()),
             kwargs["rhomin"][0,0], kwargs["rhomax"][0,0], int(kwargs["nion"]),
             kwargs["anum"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
             kwargs["anum"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
@@ -642,7 +642,7 @@ class LibProviders():
             )
         _LIBASCOT.plasma_1Dt_init(
             ctypes.byref(self._sim.plasma_data.plasma_1Dt),
-            int(kwargs["nrho"]), int(kwargs["ntime"]), int(kwargs["nion"]),
+            int(kwargs["nrho"].item()), int(kwargs["ntime"].item()), int(kwargs["nion"].item()),
             kwargs["rho"].ctypes.data_as(PTR_ARR),
             kwargs["time"].ctypes.data_as(PTR_ARR),
             kwargs["anum"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
@@ -684,7 +684,7 @@ class LibProviders():
         try:
             n = int(kwargs["nelements"].ravel()[0])
         except:
-            n = int(kwargs["nelements"])
+            n = int(kwargs["nelements"].item())
         _LIBASCOT.wall_3d_init(
             ctypes.byref(self._sim.wall_data.w3d), n,
             kwargs["x1x2x3"].ctypes.data_as(PTR_ARR),
@@ -757,7 +757,7 @@ class LibProviders():
     def _provide_Boozer(self, **kwargs):
         """Initialize :class:`Boozer` from dictionary.
         """
-        nthetag = int(kwargs["nthetag"])
+        nthetag = int(kwargs["nthetag"].item())
         padding = 4
         data = np.copy(kwargs["theta_psithetageom"])
         theta_psithetageom = np.concatenate(
@@ -767,11 +767,11 @@ class LibProviders():
              theta_psithetageom) )
         nthetag += padding*2
         _LIBASCOT.boozer_init(
-            ctypes.byref(self._sim.boozer_data), int(kwargs["npsi"]),
-            kwargs["psimin"][0], kwargs["psimax"][0],
-            int(kwargs["ntheta"]), nthetag,
+            ctypes.byref(self._sim.boozer_data), int(kwargs["npsi"].item()),
+            kwargs["psimin"].item(), kwargs["psimax"].item(),
+            int(kwargs["ntheta"].item()), nthetag,
             kwargs["nu_psitheta"].ctypes.data_as(PTR_ARR),
-            theta_psithetageom.ctypes.data_as(PTR_ARR), int(kwargs["nrzs"]),
+            theta_psithetageom.ctypes.data_as(PTR_ARR), int(kwargs["nrzs"].item()),
             kwargs["rs"].ctypes.data_as(PTR_ARR),
             kwargs["zs"].ctypes.data_as(PTR_ARR)
             )
