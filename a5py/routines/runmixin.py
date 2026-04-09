@@ -159,7 +159,7 @@ class RunMixin(DistMixin):
             idx = mask[uidx]
 
         if ids is not None:
-            _inistate_ids = self._inistate.get("ids")
+            _inistate_ids = np.asarray(self._inistate.get("ids")).squeeze()
             idx = np.logical_and(idx, np.isin(_inistate_ids, ids).reshape(_inistate_ids.shape))
 
         for i in range(len(qnt)):
