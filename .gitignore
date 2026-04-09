@@ -31,3 +31,4 @@ ascot5_main
 bbnbi5
 no_sync/
 .vscode
+*.code-workspace
