@@ -959,6 +959,8 @@ class Opt(DataGroup):
             """Make sure values are not too accurate or have too many leading
             zeroes.
             """
+            if hasattr(val, "__iter__"):
+                return [trim(v) for v in val]
             if np.abs(val) >= 1e4 or (np.abs(val) <=1e-4 and val != 0):
                 return "{0:e}".format(val)
             else:
