@@ -67,8 +67,8 @@ int hdf5_options_read(hid_t file, sim_data* sim, char* qid){
     
     // If we have that the user defined the full-orbit case, 
     // we will read the solver name and set the function pointer accordingly.
-    set_push_function(1); // This will set the function pointer to the default solver, which is VPA phase corrected. If the user has specified a different solver, this will be overwritten by the next lines.
     if(sim->sim_mode == 1) {
+        set_push_function(1); // This will set the function pointer to the default solver, which is VPA phase corrected. If the user has specified a different solver, this will be overwritten by the next lines.
         if( hdf5_read_double(OPTPATH "FULL_ORBIT_SOLVER", &tempfloat,
                              file, qid, __FILE__, __LINE__) ) {
             print_out0(VERBOSE_NORMAL, sim->mpi_rank, sim->mpi_root, \
