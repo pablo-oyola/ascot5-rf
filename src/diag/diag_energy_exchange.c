@@ -379,14 +379,14 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
             data->dEnergy[j * data->nprt + index] += 0.5 * (dE_f + dE_i) * dt;
 
             // 2. Computing the source term S1.
-            data->S1[j * data->nprt + index] += 0.5 * (vA2_f * dE_f * w1 * R2Bpol2_f + \
-                                                       vA2_i * dE_i * w0 * R2Bpol2_i) * dt;
+            data->S1[j * data->nprt + index] += 0.5 * (vA2_f * dE_f * w1 + \
+                                                       vA2_i * dE_i * w0) * dt;
 
             // 3. Computing the source term S2.
-            real dEdotv_f = charge * (vpar_f * alpha_dot * Babs_f - phipot_dot) * omega*omega;
-            real dEdotv_i = charge * (vpar_i * alpha_dot * Babs_i - phipot_dot) * omega*omega;
-            data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * w1 * R2Bpol2_f + \
-                                                       vA2_i * dEdotv_i * w0 * R2Bpol2_i) * dt;
+            real dEdotv_f = charge * (vpar_f * alpha_dot * Babs_f - phipot_dot) * omega;
+            real dEdotv_i = charge * (vpar_i * alpha_dot * Babs_i - phipot_dot) * omega;
+            data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * w1  + \
+                                                       vA2_i * dEdotv_i * w0) * dt;
         }
     }
 }
