@@ -198,13 +198,9 @@ void diag_energy_exchange_update_fo(diag_energy_exchange_data* data,
         B_field_eval_B(B, p_i->r[i], p_i->phi[i], p_i->z[i], p_f->time[i], data->B_data);
         Babs2_i = B[0] * B[0] + B[1] * B[1] + B[2] * B[2];
 
-        // Getting the poloidal field strenght times the radius.
-        real R2Bpol2_f = p_f->r[i] * p_f->r[i] * (B[0] * B[0] + B[2] * B[2]);
-        real R2Bpol2_i = p_i->r[i] * p_i->r[i] * (B[0] * B[0] + B[2] * B[2]);
-
         // Evaluating the Alfven velocity at the particle position.
-        real vA2_f = Babs2_f / (iondens_f * data->thrmass) * R2Bpol2_f;
-        real vA2_i = Babs2_i / (iondens_i * data->thrmass) * R2Bpol2_i;
+        real vA2_f = Babs2_f / (iondens_f * data->thrmass);
+        real vA2_i = Babs2_i / (iondens_i * data->thrmass);
         
         for (int j = 0; j < data->n_modes; j++) {
             if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
@@ -278,7 +274,7 @@ void diag_energy_exchange_update_fo(diag_energy_exchange_data* data,
             // 2.4. Computing the source term S2.
             real factor2 = factor1 / omega;
             data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * p_f->weight[i] + \
-                                                   vA2_i * dEdotv_i * p_i->weight[i] ) * factor2;
+                                                       vA2_i * dEdotv_i * p_i->weight[i] ) * factor2;
         }
     }
 
@@ -340,10 +336,6 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
         B_field_eval_B(B, p_i->r[i], p_i->phi[i], p_i->z[i], p_i->time[i], data->B_data);
         Babs2_i = B[0] * B[0] + B[1] * B[1] + B[2] * B[2];
 
-        // Computing the poloidal field strenght times the radius.
-        real R2Bpol2_f = p_f->r[i] * p_f->r[i] * (B[0] * B[0] + B[2] * B[2]);
-        real R2Bpol2_i = p_i->r[i] * p_i->r[i] * (B[0] * B[0] + B[2] * B[2]);
-
         // Evaluating the Alfven velocity at the particle position.
         // Technically we are evaluating the square of the Alfven velocity time mu_0.
         real vA2_f = Babs2_f / (iondens_f * data->thrmass);
@@ -355,27 +347,35 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
         real vpar_f = p_f->ppar[i] / p_f->mass[i];
         real vpar_i = p_i->ppar[i] / p_i->mass[i];
 
-        real mhd_dmhd[10];
+        real mhd_dmhd_i[10];
+        real mhd_dmhd_f[10];
         for (int j = 0; j < data->n_modes; j++) {
             if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
             // Getting the mode data at final position.
             // TODO: Optimization opportunity - could evaluate at initial position as well
             // and use midpoint rule, or cache initial values from previous step
-            mhd_stat_eval(mhd_dmhd, p_f->r[i], p_f->phi[i], 
+            mhd_stat_eval(mhd_dmhd_f, p_f->r[i], p_f->phi[i], 
                           p_f->z[i], p_f->time[i], j, data->boozerdata, 
                           data->mhd_data, data->B_data);
+            mhd_stat_eval(mhd_dmhd_i, p_i->r[i], p_i->phi[i], 
+                          p_i->z[i], p_i->time[i], j, data->boozerdata, 
+                          data->mhd_data, data->B_data);
 
-            real alpha = mhd_dmhd[0]; // Magnetic potential
-            real phipot = mhd_dmhd[5]; // Electric potential
-            real alpha_dot = mhd_dmhd[1]; // Time derivative of magnetic potential
-            real phipot_dot = mhd_dmhd[6]; // Time derivative of electric potential
+            real alpha_f = mhd_dmhd_f[0]; // Magnetic potential
+            real phipot_f = mhd_dmhd_f[5]; // Electric potential
+            real alpha_dot_f = mhd_dmhd_f[1]; // Time derivative of magnetic potential
+            real phipot_dot_f = mhd_dmhd_f[6]; // Time derivative of electric potential
+            real alpha_i = mhd_dmhd_i[0]; // Magnetic potential
+            real phipot_i = mhd_dmhd_i[5]; // Electric potential
+            real alpha_dot_i = mhd_dmhd_i[1]; // Time derivative of magnetic potential
+            real phipot_dot_i = mhd_dmhd_i[6]; // Time derivative of electric potential
             real omega = data->mhd_data->omega_nm[j]; // Toroidal frequency
             real mass = p_i->mass[i]; // Particle mass
             real charge = p_i->charge[i]; // Particle charge
 
             // 1. Evaluating the mode energy exchange.
-            real dE_f = charge * (vpar_f * alpha * Babs_f - phipot) * omega;
-            real dE_i = charge * (vpar_i * alpha * Babs_i - phipot) * omega;
+            real dE_f = charge * (vpar_f * alpha_f * Babs_f - phipot_f) * omega;
+            real dE_i = charge * (vpar_i * alpha_i * Babs_i - phipot_i) * omega;
             data->dEnergy[j * data->nprt + index] += 0.5 * (dE_f + dE_i) * dt;
 
             // 2. Computing the source term S1.
@@ -383,8 +383,8 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
                                                        vA2_i * dE_i * w0) * dt;
 
             // 3. Computing the source term S2.
-            real dEdotv_f = charge * (vpar_f * alpha_dot * Babs_f - phipot_dot) * omega;
-            real dEdotv_i = charge * (vpar_i * alpha_dot * Babs_i - phipot_dot) * omega;
+            real dEdotv_f = charge * (vpar_f * alpha_dot_f * Babs_f - phipot_dot_f) * omega;
+            real dEdotv_i = charge * (vpar_i * alpha_dot_i * Babs_i - phipot_dot_i) * omega;
             data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * w1  + \
                                                        vA2_i * dEdotv_i * w0) * dt;
         }
