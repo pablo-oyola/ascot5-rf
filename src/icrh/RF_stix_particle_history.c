@@ -21,6 +21,7 @@ void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, in
     hist->resp = (real*) malloc(nwaves * sizeof(real) * lhigh);
     if(!p->running[imrk]) return; // Particle is not running, skip.
 
+    hist->mass = p->mass[imrk];
     hist->qm = p->charge[imrk] / p->mass[imrk]; // Charge/mass ratio
     
     // We need to add to the data the current values.

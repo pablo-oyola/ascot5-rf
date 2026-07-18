@@ -23,6 +23,7 @@ typedef struct RF_particle_history{
     real* omega; /** Frequencies of the waves */
     int* ntor;  /** Toroidal mode numbers of the waves */
     real qm;  /** Particle history: charge-over-mass ratio */
+    real mass; /** Particle mass is required to transform the rhopara into vpara */
 } RF_particle_history;
 
 GPU_DECLARE_TARGET_SIMD_UNIFORM(p, nwaves, omega, ntor, lhigh)

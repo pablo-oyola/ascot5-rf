@@ -640,9 +640,9 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     real diff_dt = hist->dt[curr] - hist->dt[prev];
     real kpara = stix_data->ntor[iwave] / hist->R[curr]; // Parallel wave vector
 
-    real nu_curr = kpara * hist->rhopara[curr] * hist->bnorm[curr] + hist->qm * l * hist->bnorm[curr];
-    real nu_prev = kpara * hist->rhopara[prev] * hist->bnorm[prev] + hist->qm * l * hist->bnorm[prev];
-    real nu_prev_prev = kpara * hist->rhopara[prev_prev] * hist->bnorm[prev_prev] + hist->qm * l * hist->bnorm[prev_prev];
+    real nu_curr = kpara * hist->rhopara[curr] * hist->bnorm[curr] / hist->mass + hist->qm * l * hist->bnorm[curr];
+    real nu_prev = kpara * hist->rhopara[prev] * hist->bnorm[prev] / hist->mass + hist->qm * l * hist->bnorm[prev];
+    real nu_prev_prev = kpara * hist->rhopara[prev_prev] * hist->bnorm[prev_prev] / hist->mass + hist->qm * l * hist->bnorm[prev_prev];
 
     // Evaluation of the \dot\nu and \ddot\nu terms at the resonance crossing:
     // 1. The curve of \nu(t) is approximated by a parabola and the coefficients
