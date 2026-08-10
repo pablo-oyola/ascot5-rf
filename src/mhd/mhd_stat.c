@@ -586,6 +586,8 @@ void mhd_stat_update_amplitudes_phases(
         print_err("Error: Null pointer passed to mhd_stat_update_amplitudes_phases.\n");
         return;
     }
+
+    const real MIN_AMPLITUDE = 1e-10;  // Minimum amplitude to prevent negative values
     
     // Update amplitudes and phases for each mode
     for (int i = 0; i < data->n_modes; i++) {
@@ -595,6 +597,7 @@ void mhd_stat_update_amplitudes_phases(
         if (should_evolve) {
             // Update amplitude: A_new = A_old + dA_dt * dt
             data->amplitude_nm[i] += dA_dt[i] * dt;
+            data->amplitude_nm[i] = (data->amplitude_nm[i] < MIN_AMPLITUDE) ? MIN_AMPLITUDE : data->amplitude_nm[i];
             
             // Update phase: phi_new = phi_old + dphi_dt * dt
             data->phase_nm[i] += dphi_dt[i] * dt;
