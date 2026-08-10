@@ -69,6 +69,13 @@ a5err mhd_stat_eval_perturbations_dt(real pert_field[14], real r, real phi, real
                                      boozer_data* boozerdata, mhd_stat_data* mhddata,
                                      B_field_data* Bdata);
 
+void mhd_stat_update_log_amplitudes_phases(
+    mhd_stat_data* data,
+    real* dlnA_dt,
+    real* dphi_dt,
+    real dt,
+    int* evolve_flags);
+
 void mhd_stat_update_amplitudes_phases(
     mhd_stat_data* data,
     real* dA_dt,

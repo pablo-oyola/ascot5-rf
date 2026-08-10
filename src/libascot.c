@@ -659,8 +659,9 @@ void libascot_mhd_get_mode_specs(
  * @brief Update MHD mode amplitudes and phases based on evolution rates.
  *
  * This function updates mode amplitudes and phases in batch after computing
- * evolution rates from particle-mode interactions. It provides better memory
- * locality and performance compared to individual updates.
+ * evolution rates from particle-mode interactions. This compatibility API
+ * continues to accept physical dA/dt; the stationary MHD updater converts it
+ * to dln(A)/dt before advancing the amplitude in logarithmic space.
  *
  * @param sim simulation data struct
  * @param n_modes number of modes to update

@@ -2,6 +2,7 @@
  * @file mhd_stat.c
  * @brief MHD module for stationary amplitudes (eigenmodes).
  */
+#include <float.h>
 #include <stdlib.h>
 #include "../ascot5.h"
 #include "../print.h"
@@ -562,18 +563,71 @@ a5err mhd_stat_eval_potentials(real *alpha, real *phi, real psi, int mode,
     return err;
 }
 
+/** @brief Advance one physical amplitude from its logarithmic rate. */
+static real mhd_stat_advance_log_amplitude(
+    real amplitude, real dlnA_dt, real dt) {
+    const real MIN_AMPLITUDE = 1e-10;
+#if defined SINGLEPRECISION
+    const real MAX_AMPLITUDE = FLT_MAX;
+#else
+    const real MAX_AMPLITUDE = DBL_MAX;
+#endif
+    const real MAX_LOG_AMPLITUDE = log(MAX_AMPLITUDE);
+    real amplitude0 = fmax(amplitude, MIN_AMPLITUDE);
+    real log_amplitude = log(amplitude0) + dlnA_dt * dt;
+
+    if(log_amplitude >= MAX_LOG_AMPLITUDE) {
+        return MAX_AMPLITUDE;
+    }
+    return fmax(exp(log_amplitude), MIN_AMPLITUDE);
+}
+
 /**
- * @brief Update mode amplitudes and phases based on evolution rates.
- *
- * This function updates the mode amplitudes and phases in batch, providing
- * better memory locality and performance compared to individual updates.
+ * @brief Update mode amplitudes directly from logarithmic evolution rates.
  *
  * @param data Pointer to MHD stat data structure.
- * @param dA_dt Array of rate of change of amplitudes (input), size n_modes.
+ * @param dlnA_dt Array of dln(A)/dt values (input), size n_modes.
  * @param dphi_dt Array of rate of change of phases (input), size n_modes.
  * @param dt Time step.
- * @param evolve_flags Array indicating which modes should be evolved (1=evolve, 0=fixed).
- *                     If NULL, all modes are evolved. Size n_modes.
+ * @param evolve_flags Array indicating which modes should be evolved (1=evolve,
+ *                     0=fixed). If NULL, all modes are evolved. Size n_modes.
+ */
+void mhd_stat_update_log_amplitudes_phases(
+    mhd_stat_data* data,
+    real* dlnA_dt,
+    real* dphi_dt,
+    real dt,
+    int* evolve_flags) {
+
+    if(data == NULL || dlnA_dt == NULL || dphi_dt == NULL) {
+        print_err("Error: Null pointer passed to log-amplitude update.\n");
+        return;
+    }
+
+    for(int i = 0; i < data->n_modes; i++) {
+        int should_evolve = (evolve_flags == NULL) ? 1 : evolve_flags[i];
+
+        if(should_evolve) {
+            data->amplitude_nm[i] = mhd_stat_advance_log_amplitude(
+                data->amplitude_nm[i], dlnA_dt[i], dt);
+            data->phase_nm[i] += dphi_dt[i] * dt;
+        }
+    }
+}
+
+/**
+ * @brief Update modes from physical amplitude and phase evolution rates.
+ *
+ * This compatibility entry point preserves the physical dA/dt interface. It
+ * converts each rate to dln(A)/dt using the same positive amplitude floor as
+ * the logarithmic integrator.
+ *
+ * @param data Pointer to MHD stat data structure.
+ * @param dA_dt Array of physical dA/dt values (input), size n_modes.
+ * @param dphi_dt Array of rate of change of phases (input), size n_modes.
+ * @param dt Time step.
+ * @param evolve_flags Array indicating which modes should be evolved (1=evolve,
+ *                     0=fixed). If NULL, all modes are evolved. Size n_modes.
  */
 void mhd_stat_update_amplitudes_phases(
     mhd_stat_data* data,
@@ -581,25 +635,22 @@ void mhd_stat_update_amplitudes_phases(
     real* dphi_dt,
     real dt,
     int* evolve_flags) {
-    
-    if (data == NULL || dA_dt == NULL || dphi_dt == NULL) {
-        print_err("Error: Null pointer passed to mhd_stat_update_amplitudes_phases.\n");
+
+    const real MIN_AMPLITUDE = 1e-10;
+
+    if(data == NULL || dA_dt == NULL || dphi_dt == NULL) {
+        print_err("Error: Null pointer passed to MHD amplitude update.\n");
         return;
     }
 
-    const real MIN_AMPLITUDE = 1e-10;  // Minimum amplitude to prevent negative values
-    
-    // Update amplitudes and phases for each mode
-    for (int i = 0; i < data->n_modes; i++) {
-        // Check if this mode should be evolved
+    for(int i = 0; i < data->n_modes; i++) {
         int should_evolve = (evolve_flags == NULL) ? 1 : evolve_flags[i];
-        
-        if (should_evolve) {
-            // Update amplitude: A_new = A_old + dA_dt * dt
-            data->amplitude_nm[i] += dA_dt[i] * dt;
-            data->amplitude_nm[i] = (data->amplitude_nm[i] < MIN_AMPLITUDE) ? MIN_AMPLITUDE : data->amplitude_nm[i];
-            
-            // Update phase: phi_new = phi_old + dphi_dt * dt
+
+        if(should_evolve) {
+            real amplitude = fmax(data->amplitude_nm[i], MIN_AMPLITUDE);
+            real dlnA_dt = dA_dt[i] / amplitude;
+            data->amplitude_nm[i] = mhd_stat_advance_log_amplitude(
+                amplitude, dlnA_dt, dt);
             data->phase_nm[i] += dphi_dt[i] * dt;
         }
     }
