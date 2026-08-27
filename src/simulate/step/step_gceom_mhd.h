@@ -65,7 +65,7 @@ inline static void step_gceom_mhd(real* ydot, real* y, real mass, real charge,
                                 - gradBcrossB[0] / (normB*normB));
     Bstar[1] = B[1] + gradalphacrossB[1] + alpha * curlB[1]
         + ( y[3] / charge ) * ( curlB[1] / normB
-                                - gradBcrossB[0] / (normB*normB));
+                                - gradBcrossB[1] / (normB*normB));
     Bstar[2] = B[2] + gradalphacrossB[2] + alpha * curlB[2]
         + ( y[3] / charge ) * ( curlB[2] / normB
                                 - gradBcrossB[2] / (normB*normB));
