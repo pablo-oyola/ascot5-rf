@@ -5,6 +5,7 @@
 #include <string.h>
 #include "../B_field.h"
 #include "../consts.h"
+#include "../physlib.h"
 #include "../print.h"
 #include "../plasma.h"
 #include "../mhd/mhd_stat.h"
@@ -20,6 +21,73 @@ real simpson(real* f, int n, real dx) {
         sum += (i % 2 == 0 ? 2 : 4) * f[i];
     }
     return sum * dx / 3.0;
+}
+
+/**
+ * @brief Evaluate unit-amplitude MHD eigenfunctions at a particle position.
+ *
+ * The interpolated alpha and phi profiles are returned before applying the
+ * mode phase or amplitude. Theta and zeta are returned so the caller can
+ * evaluate the phase separately. All outputs remain zero when the point is
+ * outside the Boozer/MHD grid or interpolation fails.
+ */
+DECLARE_TARGET_SIMD_UNIFORM(boozerdata, mhddata, Bdata, mode)
+static a5err diag_energy_exchange_eval_unscaled_potentials(
+    real* alpha0, real* phipot0, real* theta, real* zeta,
+    real r, real phi, real z, int mode, boozer_data* boozerdata,
+    mhd_stat_data* mhddata, B_field_data* Bdata) {
+
+    a5err err = 0;
+    real ptz[12];
+    int isinside = 0;
+
+    *alpha0 = 0.0;
+    *phipot0 = 0.0;
+    *theta = 0.0;
+    *zeta = 0.0;
+
+    err = boozer_eval_psithetazeta(ptz, &isinside, r, phi, z, Bdata,
+                                   boozerdata);
+    if(err || !isinside) {
+        return err;
+    }
+
+    real rho[2];
+    err = B_field_eval_rho(rho, ptz[0], Bdata);
+    if(err) {
+        return err;
+    }
+
+    real alpha_eval = 0.0;
+    real phipot_eval = 0.0;
+    int interperr = 0;
+    interperr += interp1Dcomp_eval_f(
+        &alpha_eval, &(mhddata->alpha_nm[mode]), rho[0]);
+    interperr += interp1Dcomp_eval_f(
+        &phipot_eval, &(mhddata->phi_nm[mode]), rho[0]);
+    if(interperr) {
+        return err;
+    }
+
+    *alpha0 = alpha_eval;
+    *phipot0 = phipot_eval;
+    *theta = ptz[4];
+    *zeta = ptz[8];
+    return err;
+}
+
+/** @brief Evaluate the sine and cosine of one MHD mode phase. */
+DECLARE_TARGET_SIMD_UNIFORM(mhddata, mode)
+static void diag_energy_exchange_eval_mode_phase(
+    real* sinmhd, real* cosmhd, real theta, real zeta, real t, int mode,
+    mhd_stat_data* mhddata) {
+
+    real mhdarg = mhddata->nmode[mode] * zeta
+        - mhddata->mmode[mode] * theta
+        - mhddata->omega_nm[mode] * t
+        + mhddata->phase_nm[mode];
+    *sinmhd = sin(mhdarg);
+    *cosmhd = cos(mhdarg);
 }
 
 /**
@@ -343,48 +411,60 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
         real Babs_f = sqrt(Babs2_f);
         real Babs_i = sqrt(Babs2_i);
 
-        // Evaluating the parallel gyroradius at the particle position.
-        real vpar_f = p_f->ppar[i] / p_f->mass[i];
-        real vpar_i = p_i->ppar[i] / p_i->mass[i];
+        // Relativistic parallel velocity at the particle position.
+        real gamma_f = physlib_gamma_ppar(
+            p_f->mass[i], p_f->mu[i], p_f->ppar[i], Babs_f);
+        real gamma_i = physlib_gamma_ppar(
+            p_i->mass[i], p_i->mu[i], p_i->ppar[i], Babs_i);
+        real vpar_f = p_f->ppar[i] / (gamma_f * p_f->mass[i]);
+        real vpar_i = p_i->ppar[i] / (gamma_i * p_i->mass[i]);
 
-        real mhd_dmhd_i[10];
-        real mhd_dmhd_f[10];
         for (int j = 0; j < data->n_modes; j++) {
             if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
-            // Getting the mode data at final position.
-            // TODO: Optimization opportunity - could evaluate at initial position as well
-            // and use midpoint rule, or cache initial values from previous step
-            mhd_stat_eval(mhd_dmhd_f, p_f->r[i], p_f->phi[i], 
-                          p_f->z[i], p_f->time[i], j, data->boozerdata, 
-                          data->mhd_data, data->B_data);
-            mhd_stat_eval(mhd_dmhd_i, p_i->r[i], p_i->phi[i], 
-                          p_i->z[i], p_i->time[i], j, data->boozerdata, 
-                          data->mhd_data, data->B_data);
+            real alpha0_f, phipot0_f, theta_f, zeta_f;
+            real alpha0_i, phipot0_i, theta_i, zeta_i;
+            real sinmhd_f, cosmhd_f, sinmhd_i, cosmhd_i;
 
-            real alpha_f = mhd_dmhd_f[0]; // Magnetic potential
-            real phipot_f = mhd_dmhd_f[5]; // Electric potential
-            real alpha_dot_f = mhd_dmhd_f[1]; // Time derivative of magnetic potential
-            real phipot_dot_f = mhd_dmhd_f[6]; // Time derivative of electric potential
-            real alpha_i = mhd_dmhd_i[0]; // Magnetic potential
-            real phipot_i = mhd_dmhd_i[5]; // Electric potential
-            real alpha_dot_i = mhd_dmhd_i[1]; // Time derivative of magnetic potential
-            real phipot_dot_i = mhd_dmhd_i[6]; // Time derivative of electric potential
+            diag_energy_exchange_eval_unscaled_potentials(
+                &alpha0_f, &phipot0_f, &theta_f, &zeta_f,
+                p_f->r[i], p_f->phi[i], p_f->z[i], j,
+                data->boozerdata, data->mhd_data, data->B_data);
+            diag_energy_exchange_eval_unscaled_potentials(
+                &alpha0_i, &phipot0_i, &theta_i, &zeta_i,
+                p_i->r[i], p_i->phi[i], p_i->z[i], j,
+                data->boozerdata, data->mhd_data, data->B_data);
+            diag_energy_exchange_eval_mode_phase(
+                &sinmhd_f, &cosmhd_f, theta_f, zeta_f, p_f->time[i], j,
+                data->mhd_data);
+            diag_energy_exchange_eval_mode_phase(
+                &sinmhd_i, &cosmhd_i, theta_i, zeta_i, p_i->time[i], j,
+                data->mhd_data);
+
             real omega = data->mhd_data->omega_nm[j]; // Toroidal frequency
-            real mass = p_i->mass[i]; // Particle mass
             real charge = p_i->charge[i]; // Particle charge
+            real amplitude = data->mhd_data->amplitude_nm[j];
+
+            /* Unit-amplitude particle-mode coupling. The amplitude is applied
+             * only to diagnostics that represent physical energy exchange. */
+            real coupling_f = - charge * omega * sinmhd_f
+                * (vpar_f * alpha0_f * Babs_f - phipot0_f);
+            real coupling_i = - charge * omega * sinmhd_i
+                * (vpar_i * alpha0_i * Babs_i - phipot0_i);
 
             // 1. Evaluating the mode energy exchange.
-            real dE_f = charge * (vpar_f * alpha_f * Babs_f - phipot_f) * omega;
-            real dE_i = charge * (vpar_i * alpha_i * Babs_i - phipot_i) * omega;
+            real dE_f = amplitude * coupling_f;
+            real dE_i = amplitude * coupling_i;
             data->dEnergy[j * data->nprt + index] += 0.5 * (dE_f + dE_i) * dt;
 
-            // 2. Computing the source term S1.
-            data->S1[j * data->nprt + index] += 0.5 * (vA2_f * dE_f * w1 + \
-                                                       vA2_i * dE_i * w0) * dt;
+            // 2. Computing the unit-amplitude source term S1.
+            data->S1[j * data->nprt + index] += 0.5 * (vA2_f * coupling_f * w1 + \
+                                                       vA2_i * coupling_i * w0) * dt;
 
-            // 3. Computing the source term S2.
-            real dEdotv_f = charge * (vpar_f * alpha_dot_f * Babs_f - phipot_dot_f) * omega;
-            real dEdotv_i = charge * (vpar_i * alpha_dot_i * Babs_i - phipot_dot_i) * omega;
+            // 3. Preserve the existing amplitude-scaled source term S2.
+            real dEdotv_f = - amplitude * charge * omega * omega * cosmhd_f
+                * (vpar_f * alpha0_f * Babs_f - phipot0_f);
+            real dEdotv_i = - amplitude * charge * omega * omega * cosmhd_i
+                * (vpar_i * alpha0_i * Babs_i - phipot0_i);
             data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * w1  + \
                                                        vA2_i * dEdotv_i * w0) * dt;
         }
