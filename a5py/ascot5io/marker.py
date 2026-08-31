@@ -313,7 +313,7 @@ class GC(Marker):
             for key in f[path]:
                 out[key] = f[path][key][:]
                 if key == "n":
-                    out[key] = int(out[key])
+                    out[key] = int(out[key].item())
 
         out["ids"] = out["id"]
         del out["id"]
