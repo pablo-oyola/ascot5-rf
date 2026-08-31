@@ -656,18 +656,6 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     // 2. The crossing via \nu(t_0) = 0 is computed.
     // 3. The derivatives \dot\nu and \ddot\nu are evaluated at t_0.
     // 4. The interaction time is computed.
-    //
-    // REVIEW 2026-08-31 (branch review/rf2d-gc-stix-t0-parabola-fix): steps 1-3
-    // above were not actually implemented -- nudot was (nu_curr-nu_prev_prev)/
-    // ddt, i.e. \dot\nu evaluated AT t_prev, not at the crossing t_0. \ddot\nu
-    // is constant along a parabola, so nudot2 (=2*a below) was already
-    // correct; only nudot needed the t_0 correction. This is Tier 0's
-    // dt-sensitivity in campaignC_prep/TIER0_REPORT.md: the fast-ion RF tail
-    // scaled with the GC step (dt=100ns gave ~100x dt=9ns at 300 keV) because
-    // t_inter ~ 1/nudot fed straight into dmu, and nudot carried an O(step)
-    // bias. Fully reversible: `git checkout feature/133-stix_icrh_gc` leaves
-    // this branch untouched, or build with -DRF2D_GC_STIX_LEGACY_NUDOT=1 to
-    // get bit-identical pre-review behaviour on this branch.
     real a_coef = ( (nu_prev_prev - nu_prev) * hist->dt[curr]
                    + (nu_curr      - nu_prev) * hist->dt[prev] )
                   / ( hist->dt[prev] * hist->dt[curr] * ddt );
