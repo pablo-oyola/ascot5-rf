@@ -14,6 +14,7 @@
 typedef struct RF_particle_history{
     real dt[RF_N_HISTORY];    /** Particle history: time step*/
     real bnorm[RF_N_HISTORY]; /** Particle history: magnetic field strength */
+    real bphi[RF_N_HISTORY];  /** Particle history: toroidal magnetic field */
     real rhopara[RF_N_HISTORY];  /** Particle history: parallel momentum */
     real R[RF_N_HISTORY];  /** Particle history: radial coordinate */
     real *resn;  /** Resonance locations for the Stix diffusion operator ( - kpara * vpara + omega / ntor)*/

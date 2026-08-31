@@ -3071,6 +3071,7 @@ struct_RF_particle_history._pack_ = 1 # source:False
 struct_RF_particle_history._fields_ = [
     ('dt', ctypes.c_double * 3),
     ('bnorm', ctypes.c_double * 3),
+    ('bphi', ctypes.c_double * 3),
     ('rhopara', ctypes.c_double * 3),
     ('R', ctypes.c_double * 3),
     ('resn', ctypes.POINTER(ctypes.c_double)),
@@ -3080,6 +3081,7 @@ struct_RF_particle_history._fields_ = [
     ('omega', ctypes.POINTER(ctypes.c_double)),
     ('ntor', ctypes.POINTER(ctypes.c_int32)),
     ('qm', ctypes.c_double),
+    ('mass', ctypes.c_double),
 ]
 
 RF_particle_history = struct_RF_particle_history

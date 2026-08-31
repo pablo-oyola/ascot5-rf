@@ -19,10 +19,12 @@ void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, in
                               int imrk, real* omega, int* ntor, int lhigh) {
     hist->resn = (real*) malloc(nwaves * sizeof(real) * lhigh);
     hist->resp = (real*) malloc(nwaves * sizeof(real) * lhigh);
-    if(!p->running[imrk]) return; // Particle is not running, skip.
 
+    // The mass and the charge-over-mass ratio are set before the early return:
+    // both are used by the interaction time and must never be left undefined.
     hist->mass = p->mass[imrk];
     hist->qm = p->charge[imrk] / p->mass[imrk]; // Charge/mass ratio
+    if(!p->running[imrk]) return; // Particle is not running, skip.
     
     // We need to add to the data the current values.
     for(int j = 0; j < RF_N_HISTORY; j++) {
@@ -30,6 +32,7 @@ void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, in
         hist->bnorm[j] = sqrt(p->B_r[imrk]   * p->B_r[imrk]   +
                               p->B_phi[imrk] * p->B_phi[imrk] +
                               p->B_z[imrk]   * p->B_z[imrk]);
+        hist->bphi[j] = p->B_phi[imrk];
         hist->R[j] = p->r[imrk];
         hist->rhopara[j] = p->ppar[imrk] / hist->bnorm[j];
     }
@@ -91,7 +94,9 @@ void RF_particle_eval_nkicks(RF_particle_history* hist, particle_simd_gc* p,
         real resn_prv = hist->resn[iwave * hist->lhigh + j];
         real resp_prv = hist->resp[iwave * hist->lhigh + j];
 
-        real kpara = hist->ntor[iwave] / p->r[imrk];
+        // Parallel wave vector: the toroidal one projected on the field
+        // direction, k_par = (n_tor / R) * B_phi / |B|.
+        real kpara = hist->ntor[iwave] / p->r[imrk] * p->B_phi[imrk] / Babs;
         real doppler = kpara * p->ppar[imrk] / p->mass[imrk];
 
         // Evaluating current resonance locations
@@ -140,6 +145,7 @@ void RF_particle_history_update(RF_particle_history* hist, particle_simd_gc* p, 
     for(int j = RF_N_HISTORY - 1; j > 0; j--) {
         hist->dt[j] = hist->dt[j - 1];
         hist->bnorm[j] = hist->bnorm[j - 1];
+        hist->bphi[j] = hist->bphi[j - 1];
         hist->R[j] = hist->R[j - 1];
         hist->rhopara[j] = hist->rhopara[j - 1];
     }
@@ -149,6 +155,7 @@ void RF_particle_history_update(RF_particle_history* hist, particle_simd_gc* p, 
     hist->bnorm[0] = sqrt(p->B_r[imrk] * p->B_r[imrk] +
                           p->B_phi[imrk] * p->B_phi[imrk] +
                           p->B_z[imrk] * p->B_z[imrk]);
+    hist->bphi[0] = p->B_phi[imrk];
     hist->R[0] = p->r[imrk];
     hist->rhopara[0] = p->ppar[imrk] / hist->bnorm[0];
 }

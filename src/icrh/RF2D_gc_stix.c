@@ -638,11 +638,18 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     real ddt = hist->dt[curr] + hist->dt[prev];
     real ddt2 = hist->dt[curr]*hist->dt[curr] + hist->dt[prev]*hist->dt[prev];
     real diff_dt = hist->dt[curr] - hist->dt[prev];
-    real kpara = stix_data->ntor[iwave] / hist->R[curr]; // Parallel wave vector
+    // Parallel wave vector at each of the stored points: the toroidal wave
+    // vector projected on the local field direction, k_par = (n_tor/R) B_phi/|B|.
+    // Evaluating it at every point also retains the v_para * dk_par/dt part of
+    // the derivatives below, which is dropped if k_par is frozen at the current
+    // position.
+    real kpara_curr = stix_data->ntor[iwave] / hist->R[curr] * hist->bphi[curr] / hist->bnorm[curr];
+    real kpara_prev = stix_data->ntor[iwave] / hist->R[prev] * hist->bphi[prev] / hist->bnorm[prev];
+    real kpara_prev_prev = stix_data->ntor[iwave] / hist->R[prev_prev] * hist->bphi[prev_prev] / hist->bnorm[prev_prev];
 
-    real nu_curr = kpara * hist->rhopara[curr] * hist->bnorm[curr] / hist->mass + hist->qm * l * hist->bnorm[curr];
-    real nu_prev = kpara * hist->rhopara[prev] * hist->bnorm[prev] / hist->mass + hist->qm * l * hist->bnorm[prev];
-    real nu_prev_prev = kpara * hist->rhopara[prev_prev] * hist->bnorm[prev_prev] / hist->mass + hist->qm * l * hist->bnorm[prev_prev];
+    real nu_curr = kpara_curr * hist->rhopara[curr] * hist->bnorm[curr] / hist->mass + hist->qm * l * hist->bnorm[curr];
+    real nu_prev = kpara_prev * hist->rhopara[prev] * hist->bnorm[prev] / hist->mass + hist->qm * l * hist->bnorm[prev];
+    real nu_prev_prev = kpara_prev_prev * hist->rhopara[prev_prev] * hist->bnorm[prev_prev] / hist->mass + hist->qm * l * hist->bnorm[prev_prev];
 
     // Evaluation of the \dot\nu and \ddot\nu terms at the resonance crossing:
     // 1. The curve of \nu(t) is approximated by a parabola and the coefficients
@@ -658,12 +665,28 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     nudot = fmax(1e-14, fabs(nudot)); // Avoiding zero nudot
     nudot2 = fmax(1e-14, fabs(nudot2)); // Avoiding zero nudot2
 
+    // The two expressions below are the two limits of the same oscillating
+    // integral: the stationary-phase one, valid when the particle crosses the
+    // resonance transversally, and the Airy one, valid when the crossing is
+    // tangential and the two stationary points coalesce. They are the limits of
+    // the same uniform result and cross over at |zeta| ~ 1, which is therefore
+    // the criterion used to select between them.
+    //
+    // The previous criterion, |nudot| > 0.5 |nudot2| dt_sim, is only equivalent
+    // to that when the time step is comparable to the resonance time scale,
+    // ~nudot2^(-1/3), which is the case in ORBIT but not here. With the
+    // gyro-defined guiding-center steps used in ASCOT (~10 ns) its threshold
+    // sits one to two decades below the crossover, so near-tangential crossings
+    // keep using pi/|nudot|, which diverges as nudot -> 0: interaction times
+    // longer than a bounce time and single kicks with |dmu| > mu were the
+    // result. Selecting on |zeta| bounds the interaction time by its tangential
+    // (Airy) value, as it should be.
+    real zeta = - (nudot * nudot) / pow(2.0 * nudot2 * nudot2, 2.0/3.0);
+
     // Squared interaction time
-    if (fabs(nudot) > (0.5 * fabs(nudot2) * hist->dt[curr])) {
+    if (fabs(zeta) > 1.0) {
         time = M_PI / fabs(nudot);
     } else {
-        // Airy function argument
-        real zeta = - (nudot * nudot) / pow(2.0 * nudot2 * nudot2, 2.0/3.0);
         real airy_val = gsl_sf_airy_Ai(zeta, GSL_PREC_DOUBLE);
         time = 2.0 * M_PI * airy_val / pow(fabs(nudot2 / 2.0), 1.0/3.0);
         time = 0.5 * time * time;
@@ -798,7 +821,8 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
 
                 // Kick in the magnetic moment.
                 real dmu = scaling2 * (term1 + term2) * t_inter / (4 * hist[imrk].bnorm[0] * p->mass[imrk]);
-                real kpara = stix->ntor[iwave] / hist[imrk].R[0];
+                real kpara = stix->ntor[iwave] / hist[imrk].R[0]
+                             * hist[imrk].bphi[0] / hist[imrk].bnorm[0];
                 real drhopara = kpara / (lres * omega_cycl) * dmu;
 
                 // Computing the stochastic contribution.
