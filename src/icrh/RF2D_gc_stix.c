@@ -636,7 +636,6 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
 
     // Time step calculations
     real ddt = hist->dt[curr] + hist->dt[prev];
-    real ddt2 = hist->dt[curr]*hist->dt[curr] + hist->dt[prev]*hist->dt[prev];
     real diff_dt = hist->dt[curr] - hist->dt[prev];
     // Parallel wave vector at each of the stored points: the toroidal wave
     // vector projected on the local field direction, k_par = (n_tor/R) B_phi/|B|.
@@ -657,11 +656,55 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     // 2. The crossing via \nu(t_0) = 0 is computed.
     // 3. The derivatives \dot\nu and \ddot\nu are evaluated at t_0.
     // 4. The interaction time is computed.
-    real nudot = ( nu_curr - nu_prev_prev ) / ddt;
-    real nudot2 = 2.0 / ddt2 * (
-        nu_curr - 2.0 * nu_prev + nu_prev_prev
-        - nudot * diff_dt
+    //
+    // REVIEW 2026-08-31 (branch review/rf2d-gc-stix-t0-parabola-fix): steps 1-3
+    // above were not actually implemented -- nudot was (nu_curr-nu_prev_prev)/
+    // ddt, i.e. \dot\nu evaluated AT t_prev, not at the crossing t_0. \ddot\nu
+    // is constant along a parabola, so nudot2 (=2*a below) was already
+    // correct; only nudot needed the t_0 correction. This is Tier 0's
+    // dt-sensitivity in campaignC_prep/TIER0_REPORT.md: the fast-ion RF tail
+    // scaled with the GC step (dt=100ns gave ~100x dt=9ns at 300 keV) because
+    // t_inter ~ 1/nudot fed straight into dmu, and nudot carried an O(step)
+    // bias. Fully reversible: `git checkout feature/133-stix_icrh_gc` leaves
+    // this branch untouched, or build with -DRF2D_GC_STIX_LEGACY_NUDOT=1 to
+    // get bit-identical pre-review behaviour on this branch.
+    real a_coef = ( (nu_prev_prev - nu_prev) * hist->dt[curr]
+                   + (nu_curr      - nu_prev) * hist->dt[prev] )
+                  / ( hist->dt[prev] * hist->dt[curr] * ddt );
+    real b_coef = ( nu_curr - nu_prev_prev ) / ddt - a_coef * diff_dt;
+    real nudot2 = 2.0 * a_coef; // \ddot\nu, constant along the parabola
+
+#ifdef RF2D_GC_STIX_LEGACY_NUDOT
+    real ddt2 = hist->dt[curr]*hist->dt[curr] + hist->dt[prev]*hist->dt[prev];
+    real nudot = ( nu_curr - nu_prev_prev ) / ddt; // pre-review: \dot\nu at t_prev
+    nudot2 = 2.0 / ddt2 * (
+        nu_curr - 2.0 * nu_prev + nu_prev_prev - nudot * diff_dt
     );
+#else
+    real nudot = b_coef; // fallback: \dot\nu at t_prev (pre-review value)
+    if (fabs(a_coef) > 1e-14) {
+        // Solve a*tau^2 + b*tau + c = 0 (c = nu_prev) for the root nearest
+        // tau = 0 that also falls inside the sampled bracket
+        // [-hist->dt[prev], hist->dt[curr]]; that is the physical crossing
+        // t_0, the other root of the parabola is spurious. A negative
+        // discriminant means the local parabola does not actually recross
+        // zero (e.g. noisy or poorly-resolved history) and we keep the
+        // t_prev fallback above rather than propagate a NaN.
+        real disc = b_coef * b_coef - 4.0 * a_coef * nu_prev;
+        if (disc >= 0.0) {
+            real sq = sqrt(disc);
+            real q = -0.5 * ( b_coef + copysign(sq, b_coef) );
+            real tau_a = (fabs(q) > 1e-300) ? q / a_coef : 0.0;
+            real tau_b = (fabs(q) > 1e-300) ? nu_prev / q : tau_a;
+            int a_in = (tau_a >= -hist->dt[prev] && tau_a <= hist->dt[curr]);
+            int b_in = (tau_b >= -hist->dt[prev] && tau_b <= hist->dt[curr]);
+            real tau0 = tau_a;
+            if (b_in && (!a_in || fabs(tau_b) < fabs(tau_a))) tau0 = tau_b;
+            if (a_in || b_in) nudot = 2.0 * a_coef * tau0 + b_coef;
+        }
+    }
+#endif
+
     nudot = fmax(1e-14, fabs(nudot)); // Avoiding zero nudot
     nudot2 = fmax(1e-14, fabs(nudot2)); // Avoiding zero nudot2
 
