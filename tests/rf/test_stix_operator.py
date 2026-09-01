@@ -164,8 +164,9 @@ class TestPolarizationIdentities(unittest.TestCase):
 class TestDriftDiffusionConsistency(unittest.TestCase):
     """Section 3.1 (P1): a Monte-Carlo kick meant to realize
     d/dt f = d/dmu (D df/dmu) must satisfy <dmu> = d(D)/dmu, where
-    D = 0.5*<dmu_stoch^2>. Checks the as-coded irnd=cos(...) normalization,
-    then the proposed sqrt(2)*cos(...) fix."""
+    D = 0.5*<dmu_stoch^2>. RF2D_gc_stix.c now uses
+    irnd = sqrt(2)*cos(lres*rnd*2*pi); this checks that fixed behavior
+    and documents the pre-fix bug (irnd = cos(...) alone) it replaced."""
 
     # Fixed "wave" parameters; arg = kperp*rhoL = c*sqrt(mu) is the only
     # mu-dependence, exactly as in the C code (rhoL ~ sqrt(mu)).
@@ -206,17 +207,19 @@ class TestDriftDiffusionConsistency(unittest.TestCase):
         dD_dmu = (D_p - D_m) / (2 * h)
         return dmu_0 / dD_dmu
 
-    def test_asdcoded_drift_diffusion_ratio_is_2(self):
-        rng = np.random.default_rng(42)
-        ratio = self._ratio_dmu_over_dDdmu(sqrt2_fix=False, rng=rng)
-        # As-coded: <dmu> should be 2x too large relative to d(D)/dmu -
-        # i.e. the realized diffusion is half of what the coded drift implies.
-        self.assertAlmostEqual(ratio, 2.0, delta=0.05)
-
-    def test_sqrt2_fix_restores_consistency(self):
+    def test_current_code_is_drift_diffusion_consistent(self):
+        """Matches RF2D_gc_stix.c as it stands (irnd = sqrt(2)*cos(...))."""
         rng = np.random.default_rng(43)
         ratio = self._ratio_dmu_over_dDdmu(sqrt2_fix=True, rng=rng)
         self.assertAlmostEqual(ratio, 1.0, delta=0.05)
+
+    def test_prefix_code_was_inconsistent_by_factor_2(self):
+        """Documents the bug this session fixed: irnd = cos(...) alone
+        (no sqrt(2)) made the realized diffusion half of what the coded
+        drift implied."""
+        rng = np.random.default_rng(42)
+        ratio = self._ratio_dmu_over_dDdmu(sqrt2_fix=False, rng=rng)
+        self.assertAlmostEqual(ratio, 2.0, delta=0.05)
 
 
 class TestInteractionTimeBranchSeam(unittest.TestCase):

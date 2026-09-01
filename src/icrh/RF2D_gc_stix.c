@@ -856,8 +856,12 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
                              * hist[imrk].bphi[0] / hist[imrk].bnorm[0];
                 real drhopara = kpara / (lres * omega_cycl) * dmu;
 
-                // Computing the stochastic contribution.
-                real irnd = cos(lres * rnd[imrk_rnd_idx] * 2.0 * M_PI);
+                // Computing the stochastic contribution. sqrt(2) normalizes
+                // <irnd^2> to 1 over the random phase (cos(...) alone gives
+                // 1/2), which is required for the realized diffusion
+                // 0.5*<dmu_stoch^2> to match d/dmu of the drift dmu above -
+                // see tests/rf/test_stix_operator.py::TestDriftDiffusionConsistency.
+                real irnd = sqrt(2.0) * cos(lres * rnd[imrk_rnd_idx] * 2.0 * M_PI);
                 used[imrk_rnd_idx] = 0; // Mark as used.
 
                 // The following part is prone to underflow since the mu values are always
