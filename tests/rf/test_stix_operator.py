@@ -89,12 +89,12 @@ def eval_resn_resp(ntor, R, bphi, Babs, ppar, mass, qm, omega, lres):
     return resn, resp
 
 
-def code_rres_interp(Rgrid_jm1, Rgrid_j, prev, next_):
-    """Transcription of the root interpolation in
-    RF2D_gc_stix_compute_cold_resonances, line 562 (as-written, buggy).
-    Arguments are cast to numpy float64 so that, exactly as in the C `real`
-    (double) arithmetic, a zero denominator yields inf/nan rather than
-    raising ZeroDivisionError."""
+def prefix_rres_interp(Rgrid_jm1, Rgrid_j, prev, next_):
+    """The root interpolation as it stood before this session's fix, in
+    RF2D_gc_stix_compute_cold_resonances, line 562. Arguments are cast to
+    numpy float64 so that, exactly as in the C `real` (double) arithmetic,
+    a zero denominator yields inf/nan rather than raising
+    ZeroDivisionError."""
     Rgrid_jm1 = np.float64(Rgrid_jm1)
     Rgrid_j = np.float64(Rgrid_j)
     prev = np.float64(prev)
@@ -103,9 +103,10 @@ def code_rres_interp(Rgrid_jm1, Rgrid_j, prev, next_):
         return Rgrid_jm1 - abs(prev) * (Rgrid_j - Rgrid_jm1) / (abs(next_) - abs(prev))
 
 
-def correct_rres_interp(Rgrid_jm1, Rgrid_j, prev, next_):
-    """Standard linear-interpolation root: R where the sign-changing linear
-    segment through (Rgrid_jm1, prev) and (Rgrid_j, next_) crosses zero."""
+def fixed_rres_interp(Rgrid_jm1, Rgrid_j, prev, next_):
+    """Transcription of the fixed formula now in RF2D_gc_stix.c: the
+    standard linear-interpolation root, where the sign-changing segment
+    through (Rgrid_jm1, prev) and (Rgrid_j, next_) crosses zero."""
     frac = abs(prev) / (abs(prev) + abs(next_))
     return Rgrid_jm1 + frac * (Rgrid_j - Rgrid_jm1)
 
@@ -295,28 +296,35 @@ class TestKparaInitConsistency(unittest.TestCase):
 
 
 class TestColdResonanceRootInterpolation(unittest.TestCase):
-    """Section 3.4 (B10): the coded linear-interpolation root can land
-    outside the bracket, or divide by zero, for an asymmetric sign change."""
+    """Section 3.4 (B10). RF2D_gc_stix.c now uses the standard linear-
+    interpolation root; the pre-fix formula could land outside the bracket
+    or divide by zero for an asymmetric sign change."""
 
-    def test_root_lands_outside_bracket_for_asymmetric_signs(self):
+    def test_fixed_formula_stays_in_bracket(self):
         Rjm1, Rj = 1.0, 1.1
         prev, next_ = -1.0, 3.0  # sign change between prev and next
-        coded = code_rres_interp(Rjm1, Rj, prev, next_)
-        correct = correct_rres_interp(Rjm1, Rj, prev, next_)
+        fixed = fixed_rres_interp(Rjm1, Rj, prev, next_)
+        self.assertTrue(Rjm1 <= fixed <= Rj)
 
-        self.assertTrue(coded < Rjm1 or coded > Rj,
-                         f"expected the buggy formula to land outside "
-                         f"[{Rjm1}, {Rj}], got {coded}")
-        self.assertTrue(Rjm1 <= correct <= Rj)
-
-    def test_division_by_zero_for_symmetric_signs(self):
+    def test_fixed_formula_well_defined_for_symmetric_signs(self):
         Rjm1, Rj = 1.0, 1.1
         prev, next_ = -2.0, 2.0  # |prev| == |next|
-        coded = code_rres_interp(Rjm1, Rj, prev, next_)
-        self.assertTrue(np.isnan(coded) or np.isinf(coded))
-        # The correct formula is well-defined and lands at the midpoint.
-        correct = correct_rres_interp(Rjm1, Rj, prev, next_)
-        self.assertAlmostEqual(correct, 0.5 * (Rjm1 + Rj))
+        fixed = fixed_rres_interp(Rjm1, Rj, prev, next_)
+        self.assertAlmostEqual(fixed, 0.5 * (Rjm1 + Rj))
+
+    def test_prefix_formula_landed_outside_bracket_for_asymmetric_signs(self):
+        Rjm1, Rj = 1.0, 1.1
+        prev, next_ = -1.0, 3.0
+        prefix = prefix_rres_interp(Rjm1, Rj, prev, next_)
+        self.assertTrue(prefix < Rjm1 or prefix > Rj,
+                         f"expected the pre-fix formula to land outside "
+                         f"[{Rjm1}, {Rj}], got {prefix}")
+
+    def test_prefix_formula_divided_by_zero_for_symmetric_signs(self):
+        Rjm1, Rj = 1.0, 1.1
+        prev, next_ = -2.0, 2.0
+        prefix = prefix_rres_interp(Rjm1, Rj, prev, next_)
+        self.assertTrue(np.isnan(prefix) or np.isinf(prefix))
 
 
 if __name__ == "__main__":

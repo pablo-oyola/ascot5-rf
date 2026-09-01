@@ -558,8 +558,9 @@ a5err RF2D_gc_stix_compute_cold_resonances(RF2D_gc_stix* stix_data,
                 prev = next;
                 next = stix_data->omega[iwave] - l_res * qm * Bnorm[j];
                 if(prev*next < 0.0){
-                    // We have a root between j-1 and j.
-                    real Rres = Rgrid[j-1] - fabs(prev) * (Rgrid[j] - Rgrid[j-1])  / (fabs(next) - fabs(prev));
+                    // We have a root between j-1 and j: linear interpolation
+                    // of the sign-changing segment (prev, next) to zero.
+                    real Rres = Rgrid[j-1] + fabs(prev) / (fabs(prev) + fabs(next)) * (Rgrid[j] - Rgrid[j-1]);
                     Rres_tmp[i] = Rres;
                     res_indx[i] = l_res; // Store the index of the root
                     nres++;
