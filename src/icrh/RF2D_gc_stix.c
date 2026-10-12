@@ -639,13 +639,14 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     real ddt = hist->dt[curr] + hist->dt[prev];
     real diff_dt = hist->dt[curr] - hist->dt[prev];
     // Parallel wave vector at each of the stored points: the toroidal wave
-    // vector projected on the local field direction, k_par = (n_tor/R) B_phi/|B|.
+    // vector projected on the local field direction, k_par = -(n_tor/R) B_phi/|B|
+    // (minus: TORIC's toroidal angle is varphi = -phi, Brambilla 1999, Eq. (55)).
     // Evaluating it at every point also retains the v_para * dk_par/dt part of
     // the derivatives below, which is dropped if k_par is frozen at the current
     // position.
-    real kpara_curr = stix_data->ntor[iwave] / hist->R[curr] * hist->bphi[curr] / hist->bnorm[curr];
-    real kpara_prev = stix_data->ntor[iwave] / hist->R[prev] * hist->bphi[prev] / hist->bnorm[prev];
-    real kpara_prev_prev = stix_data->ntor[iwave] / hist->R[prev_prev] * hist->bphi[prev_prev] / hist->bnorm[prev_prev];
+    real kpara_curr = -stix_data->ntor[iwave] / hist->R[curr] * hist->bphi[curr] / hist->bnorm[curr];
+    real kpara_prev = -stix_data->ntor[iwave] / hist->R[prev] * hist->bphi[prev] / hist->bnorm[prev];
+    real kpara_prev_prev = -stix_data->ntor[iwave] / hist->R[prev_prev] * hist->bphi[prev_prev] / hist->bnorm[prev_prev];
 
     real nu_curr = kpara_curr * hist->rhopara[curr] * hist->bnorm[curr] / hist->mass + hist->qm * l * hist->bnorm[curr];
     real nu_prev = kpara_prev * hist->rhopara[prev] * hist->bnorm[prev] / hist->mass + hist->qm * l * hist->bnorm[prev];
@@ -700,24 +701,42 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     // The two expressions below are the two limits of the same oscillating
     // integral: the stationary-phase one, valid when the particle crosses the
     // resonance transversally, and the Airy one, valid when the crossing is
-    // tangential and the two stationary points coalesce. They are the limits of
-    // the same uniform result and cross over at |zeta| ~ 1, which is therefore
-    // the criterion used to select between them.
+    // tangential and the two stationary points coalesce.
     //
-    // The previous criterion, |nudot| > 0.5 |nudot2| dt_sim, is only equivalent
-    // to that when the time step is comparable to the resonance time scale,
-    // ~nudot2^(-1/3), which is the case in ORBIT but not here. With the
-    // gyro-defined guiding-center steps used in ASCOT (~10 ns) its threshold
-    // sits one to two decades below the crossover, so near-tangential crossings
-    // keep using pi/|nudot|, which diverges as nudot -> 0: interaction times
-    // longer than a bounce time and single kicks with |dmu| > mu were the
-    // result. Selecting on |zeta| bounds the interaction time by its tangential
-    // (Airy) value, as it should be.
+    // Normalisation. The squared interaction time is |I|^2 with
+    // I = int exp(i Phi(t)) dt the phase integral over one crossing; the kick
+    // in RF2D_gc_stix_scatter is (q v_perp E_c J)^2 |I|^2 <cos^2> with E_c the
+    // physical circular amplitude (Eplus_2 = 2|E+|^2 and the 1/4 there only
+    // convert the Brambilla/TORIC unitary E+ = (E_psi + i E_eta)/sqrt2 into
+    // |Ex + i Ey|^2 and back to E_c^2). The stationary-phase value of |I|^2
+    // for an isolated transverse crossing is 2 pi/|nudot|
+    // The Airy integral is |I|^2 for the coherent pair of crossings of one
+    // tangential passage (entry and exit); its large-|zeta| mean-square is
+    // 2 x (2 pi/|nudot|), so per crossing it carries the factor 0.5 below
+    // (the same full-orbit runs give 0.83-1.05 x that value at |zeta| < 1.2).
+    //
+    // Switch. Written in units of (2/|nudot2|)^(2/3), the two branches are
+    // 2 pi^2 Ai(zeta)^2 and pi |zeta|^(-1/2); they are equal where
+    // 2 pi Ai(-x)^2 sqrt(x) = 1, at x = 0.497 and x = 1.792. Switching at the
+    // second root keeps the coherent first lobe of Ai^2 (max 2.83 at x = 1.02)
+    // and hands over to the incoherent value where the phase accumulated
+    // between the two crossings, (4/3)|zeta|^(3/2), reaches ~pi, i.e. where an
+    // ensemble of markers starts to wash the interference out. The branches
+    // are continuous there. The first root is the alternative continuous
+    // choice that discards the lobe. (Full-orbit pairs at |zeta| 2-7 scatter
+    // between 0.3 and 1.7 x the incoherent sum: the real interference phase
+    // is set by int nu dt between the crossings, which no local form gives.) Selecting on |zeta| rather than on
+    // |nudot| > 0.5 |nudot2| dt_sim (ORBIT) is what makes the switch
+    // independent of the integration step: the ORBIT form only coincides
+    // with the crossover when dt_sim ~ 2.5 nudot2^(-1/3), which holds for its
+    // hundreds-of-ns steps and not for ASCOT's ~10 ns ones, where it would
+    // leave near-tangential crossings on pi/|nudot|, which diverges.
+    const real zeta_switch = 1.792033;
     real zeta = - (nudot * nudot) / pow(2.0 * nudot2 * nudot2, 2.0/3.0);
 
     // Squared interaction time
-    if (fabs(zeta) > 1.0) {
-        time = M_PI / fabs(nudot);
+    if (fabs(zeta) > zeta_switch) {
+        time = 2.0 * M_PI / fabs(nudot);
     } else {
         real airy_val = gsl_sf_airy_Ai(zeta, GSL_PREC_DOUBLE);
         time = 2.0 * M_PI * airy_val / pow(fabs(nudot2 / 2.0), 1.0/3.0);
@@ -853,7 +872,7 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
 
                 // Kick in the magnetic moment.
                 real dmu = scaling2 * (term1 + term2) * t_inter / (4 * hist[imrk].bnorm[0] * p->mass[imrk]);
-                real kpara = stix->ntor[iwave] / hist[imrk].R[0]
+                real kpara = -stix->ntor[iwave] / hist[imrk].R[0]
                              * hist[imrk].bphi[0] / hist[imrk].bnorm[0];
                 real drhopara = kpara / (lres * omega_cycl) * dmu;
 

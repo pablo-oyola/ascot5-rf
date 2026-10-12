@@ -39,6 +39,8 @@ void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, in
 
     for (int i = 0; i < nwaves; i++) {
         for(int j = 0; j < lhigh; j++) {
+            real kpara = -ntor[i] / p->r[imrk] * p->B_phi[imrk] / hist->bnorm[0];
+            real doppler = kpara * p->ppar[imrk] / p->mass[imrk];
             real Babs = hist->bnorm[0]; // Use the first history point for Babs
             // Parallel wave vector: the toroidal one projected on the field
             // direction, k_par = (n_tor / R) * B_phi / |B|, matching the
@@ -95,24 +97,29 @@ void RF_particle_eval_nkicks(RF_particle_history* hist, particle_simd_gc* p,
 
     for(int j = 0; j < hist->lhigh; j++){
         real resn_prv = hist->resn[iwave * hist->lhigh + j];
-        real resp_prv = hist->resp[iwave * hist->lhigh + j];
 
         // Parallel wave vector: the toroidal one projected on the field
-        // direction, k_par = (n_tor / R) * B_phi / |B|.
-        real kpara = hist->ntor[iwave] / p->r[imrk] * p->B_phi[imrk] / Babs;
+        // direction, k_par = -(n_tor / R) * B_phi / |B|. The minus sign is
+        // TORIC's toroidal angle, varphi = -phi (Brambilla 1999, Eq. (55)).
+        real kpara = -hist->ntor[iwave] / p->r[imrk] * p->B_phi[imrk] / Babs;
         real doppler = kpara * p->ppar[imrk] / p->mass[imrk];
 
         // Evaluating current resonance locations
         int l = j + 1; // Resonance level starts from 1
         hist->resn[iwave * hist->lhigh + j] = hist->omega[iwave] - l * qm * Babs - doppler;
-        hist->resp[iwave * hist->lhigh + j] = hist->omega[iwave] - l * qm * Babs + doppler;
 
         // Check if the resonance condition has changed sign
         if ((resn_prv * hist->resn[iwave * hist->lhigh + j] < 0.0)){
             (*nkicks)++;
             *lres = l; // Update the resonance level
 
-            // Checking the positive resonance condition
+            // Positive-Doppler condition, as in ORBIT-RF scatrf with nres = 2:
+            // resp is only refreshed here, at a resn crossing, so resp_prv is
+            // its value at the previous resn crossing of this harmonic (or at
+            // initialisation). Since resp ~ 2 k_par v_par at a resn crossing,
+            // the extra kick fires when v_par changed sign in between.
+            real resp_prv = hist->resp[iwave * hist->lhigh + j];
+            hist->resp[iwave * hist->lhigh + j] = hist->omega[iwave] - l * qm * Babs + doppler;
             if(resp_prv * hist->resp[iwave * hist->lhigh + j] < 0.0) (*nkicks)++;
             break;
         }
