@@ -638,13 +638,14 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     real ddt = hist->dt[curr] + hist->dt[prev];
     real diff_dt = hist->dt[curr] - hist->dt[prev];
     // Parallel wave vector at each of the stored points: the toroidal wave
-    // vector projected on the local field direction, k_par = (n_tor/R) B_phi/|B|.
+    // vector projected on the local field direction, k_par = -(n_tor/R) B_phi/|B|
+    // (minus: TORIC's toroidal angle is varphi = -phi, Brambilla 1999, Eq. (55)).
     // Evaluating it at every point also retains the v_para * dk_par/dt part of
     // the derivatives below, which is dropped if k_par is frozen at the current
     // position.
-    real kpara_curr = stix_data->ntor[iwave] / hist->R[curr] * hist->bphi[curr] / hist->bnorm[curr];
-    real kpara_prev = stix_data->ntor[iwave] / hist->R[prev] * hist->bphi[prev] / hist->bnorm[prev];
-    real kpara_prev_prev = stix_data->ntor[iwave] / hist->R[prev_prev] * hist->bphi[prev_prev] / hist->bnorm[prev_prev];
+    real kpara_curr = -stix_data->ntor[iwave] / hist->R[curr] * hist->bphi[curr] / hist->bnorm[curr];
+    real kpara_prev = -stix_data->ntor[iwave] / hist->R[prev] * hist->bphi[prev] / hist->bnorm[prev];
+    real kpara_prev_prev = -stix_data->ntor[iwave] / hist->R[prev_prev] * hist->bphi[prev_prev] / hist->bnorm[prev_prev];
 
     real nu_curr = kpara_curr * hist->rhopara[curr] * hist->bnorm[curr] / hist->mass + hist->qm * l * hist->bnorm[curr];
     real nu_prev = kpara_prev * hist->rhopara[prev] * hist->bnorm[prev] / hist->mass + hist->qm * l * hist->bnorm[prev];
@@ -707,9 +708,7 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     // physical circular amplitude (Eplus_2 = 2|E+|^2 and the 1/4 there only
     // convert the Brambilla/TORIC unitary E+ = (E_psi + i E_eta)/sqrt2 into
     // |Ex + i Ey|^2 and back to E_c^2). The stationary-phase value of |I|^2
-    // for an isolated transverse crossing is 2 pi/|nudot| (not pi/|nudot|,
-    // which is a factor 2 low: verified 2026-09-16 against full-orbit runs in
-    // a uniform E+ plane wave, FO/QL = 0.9 +- 0.3 with 2 pi, 1.85 with pi).
+    // for an isolated transverse crossing is 2 pi/|nudot|
     // The Airy integral is |I|^2 for the coherent pair of crossings of one
     // tangential passage (entry and exit); its large-|zeta| mean-square is
     // 2 x (2 pi/|nudot|), so per crossing it carries the factor 0.5 below
@@ -872,7 +871,7 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
 
                 // Kick in the magnetic moment.
                 real dmu = scaling2 * (term1 + term2) * t_inter / (4 * hist[imrk].bnorm[0] * p->mass[imrk]);
-                real kpara = stix->ntor[iwave] / hist[imrk].R[0]
+                real kpara = -stix->ntor[iwave] / hist[imrk].R[0]
                              * hist[imrk].bphi[0] / hist[imrk].bnorm[0];
                 real drhopara = kpara / (lres * omega_cycl) * dmu;
 
