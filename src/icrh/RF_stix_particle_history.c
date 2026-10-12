@@ -39,13 +39,12 @@ void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, in
 
     for (int i = 0; i < nwaves; i++) {
         for(int j = 0; j < lhigh; j++) {
-            real kpara = -ntor[i] / p->r[imrk] * p->B_phi[imrk] / hist->bnorm[0];
-            real doppler = kpara * p->ppar[imrk] / p->mass[imrk];
             real Babs = hist->bnorm[0]; // Use the first history point for Babs
             // Parallel wave vector: the toroidal one projected on the field
-            // direction, k_par = (n_tor / R) * B_phi / |B|, matching the
-            // convention used in RF_particle_eval_nkicks.
-            real kpara = ntor[i] / p->r[imrk] * hist->bphi[0] / Babs;
+            // direction, k_par = -(n_tor / R) * B_phi / |B| (minus: TORIC's
+            // toroidal angle is varphi = -phi, Brambilla 1999, Eq. (55)),
+            // matching the convention used in RF_particle_eval_nkicks.
+            real kpara = -ntor[i] / p->r[imrk] * hist->bphi[0] / Babs;
             real doppler = kpara * p->ppar[imrk] / p->mass[imrk];
             int lres = j + 1; // Resonance level starts from 1
             hist->resn[i * lhigh + j] = omega[i] - lres * hist->qm * Babs - doppler;
