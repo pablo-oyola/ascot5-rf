@@ -66,9 +66,13 @@ void math_jac_rpz2xyz(real* rpz, real* xyz, real r, real phi) {
     temp[1] = rpz[2] * s + rpz[6] * c;
     temp[2] = rpz[3] * s + rpz[7] * c;
 
-    // Step 2: Gradient
-    xyz[5] = temp[0] * c - temp[1] * s / r + (rpz[0]*c - rpz[4]*s) * s / r;
-    xyz[6] = temp[0] * s + temp[1] * c / r - (rpz[0]*c - rpz[4]*s) * c / r;
+    // Step 2: Gradient. d(By)/dphi = (dBr/dphi) s + (dBphi/dphi) c
+    // + (Br c - Bphi s): the geometric term enters with a plus sign here
+    // (it has a minus sign for Bx), so it is subtracted in d/dx and added in
+    // d/dy. The signs were swapped before, which made both entries wrong at
+    // every phi and broke the toroidal symmetry of the GC transformation.
+    xyz[5] = temp[0] * c - temp[1] * s / r - (rpz[0]*c - rpz[4]*s) * s / r;
+    xyz[6] = temp[0] * s + temp[1] * c / r + (rpz[0]*c - rpz[4]*s) * c / r;
     xyz[7] = temp[2];
 
     // Step 1: Vector [dBz/dx dBz/dy dBz/dz]
