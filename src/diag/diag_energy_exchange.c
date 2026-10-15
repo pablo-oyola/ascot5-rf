@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <float.h>
 #include "../B_field.h"
 #include "../consts.h"
 #include "../physlib.h"
@@ -14,6 +15,33 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846 /**< Definition of pi if not defined. */
 #endif
+
+/* Full-orbit field cache. Per mode and marker it holds the single-mode
+ * field E (3) and dE/dt (3) at the end point of the marker's last step, and
+ * the time of that point. In the fixed-step loop the next step starts from
+ * an exact copy of that state, so its start-point field is reused instead
+ * of evaluated again; an entry is used only if its time equals the start
+ * time of the current step, so a marker's first step, and any step that does
+ * not continue the previous one, evaluates the start point afresh. */
+#define FO_CACHE_STRIDE 7
+#define FO_CACHE_TIME   6
+#define FO_CACHE_EMPTY  (-DBL_MAX)
+
+/** @brief Mark every cache entry as empty (no-op without a cache). */
+static void fo_cache_reset(diag_energy_exchange_data* data) {
+    if(data->cached_fields_i == NULL) return;
+    size_t n = (size_t)data->n_modes * (size_t)data->nprt;
+    for(size_t k = 0; k < n; k++) {
+        data->cached_fields_i[k * FO_CACHE_STRIDE + FO_CACHE_TIME] = FO_CACHE_EMPTY;
+    }
+}
+
+/** @brief Allocate and empty the cache for the current size. */
+static void fo_cache_allocate(diag_energy_exchange_data* data) {
+    size_t n = (size_t)data->n_modes * (size_t)data->nprt * FO_CACHE_STRIDE;
+    data->cached_fields_i = (real*)malloc(n * sizeof(real));
+    fo_cache_reset(data);
+}
 
 real simpson(real* f, int n, real dx) {
     real sum = f[0] + f[n-1];
@@ -144,12 +172,10 @@ void diag_energy_exchange_init(diag_energy_exchange_data* data,
     data->S1 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->S2 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->dEnergy = (real*)malloc(data->n_modes * nprt * sizeof(real));
-    // Allocate memory for cached field values (Er, Ephi, Ez, dEr, dEphi, dEz = 6 values per particle per mode)
-    data->cached_fields_i = (real*)malloc(data->n_modes * nprt * 6 * sizeof(real));
+    fo_cache_allocate(data);
     memset(data->S1, 0, data->n_modes * nprt * sizeof(real));
     memset(data->S2, 0, data->n_modes * nprt * sizeof(real));
     memset(data->dEnergy, 0, data->n_modes * nprt * sizeof(real));
-    memset(data->cached_fields_i, 0, data->n_modes * nprt * 6 * sizeof(real));
 
     // Finally we get from the plasma data the mass of the main ion species.
     data->thrmass = plasma_get_species_mass(plasma_data)[1];
@@ -170,7 +196,9 @@ void diag_energy_exchange_free(diag_energy_exchange_data* data) {
     if (data->S1) free(data->S1);
     if (data->S2) free(data->S2);
     if (data->dEnergy) free(data->dEnergy);
+    if (data->is_mode_evol) free(data->is_mode_evol);
     if (data->cached_fields_i) free(data->cached_fields_i);
+    data->cached_fields_i = NULL;
     data->mhd_data = NULL;
     data->boozerdata = NULL;
     data->n_modes = 0;
@@ -190,16 +218,18 @@ void diag_energy_exchange_free(diag_energy_exchange_data* data) {
 void diag_energy_exchange_offload(diag_energy_exchange_data* data) {
     GPU_MAP_TO_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                     data->S2[0: data->n_modes * data->nprt], 
-                    data->dEnergy[0: data->n_modes * data->nprt],
-                    data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
+                    data->dEnergy[0: data->n_modes * data->nprt]);
+    if(data->cached_fields_i != NULL) {
+        GPU_MAP_TO_DEVICE(
+            data->cached_fields_i[0: data->n_modes * data->nprt * FO_CACHE_STRIDE]);
+    }
 }
 
 
 void diag_energy_exchange_onload(diag_energy_exchange_data* data) {
     GPU_MAP_FROM_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                         data->S2[0: data->n_modes * data->nprt], 
-                        data->dEnergy[0: data->n_modes * data->nprt],
-                        data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
+                        data->dEnergy[0: data->n_modes * data->nprt]);
 
 }
 
@@ -207,142 +237,136 @@ void diag_energy_exchange_onload(diag_energy_exchange_data* data) {
 
 /**
  * @brief Energy exchange calculation for full-orbit particles.
- * 
- * This function updates the energy exchange diagnostic data based on the
- * interaction between a full-orbit particle and the MHD modes, based on the
- * end and start conditions of the particle for a given time step.
- * 
- * Since the total energy difference in the p_i and p_f may also include other
- * factors, such as drag and diffusion, RF, etc and it is the total energy 
- * difference, not discriminating by mode numbers (n, m), this function will
- * give instead a comprehensive diagnostic on the energy exchange.
- * 
- * To compute the energy exchange and the current coupling terms, we will use
- * the trapezoidal rule to integrate over the time step of the particle.
- * 
- * @todo This should be done more efficiently, there is no need to evaluate again
- * the initial and final electric fields: just the final one is enough.
- * 
+ *
+ * Accumulates, with the trapezoidal rule over each orbit step, the same three
+ * quantities as the guiding-centre version:
+ *
+ * - dEnergy: the work done by the mode, int q v.E dt (amplitude included);
+ * - S1: the unit-amplitude in-phase power, sum w int mu0 vA^2 q v.E/A dt;
+ * - S2: the unit-amplitude quadrature power, sum w int mu0 vA^2 q v.E_q/A dt,
+ *   where E_q = -(1/omega) dE/dt is the field of the same mode advanced by a
+ *   quarter period in phase.
+ *
+ * The unit-amplitude field is the single-mode perturbation divided by that
+ * mode's current amplitude, so S1 and S2 do not depend on the amplitude
+ * explicitly. Velocities are p/(gamma m).
+ *
  * @param data Pointer to the diagnostic data structure.
  * @param p_f Pointer to the full-orbit particle at the end of the time step.
  * @param p_i Pointer to the full-orbit particle at the start of the time step.
  */
-void diag_energy_exchange_update_fo(diag_energy_exchange_data* data, 
-                                    particle_simd_fo* p_f, 
+void diag_energy_exchange_update_fo(diag_energy_exchange_data* data,
+                                    particle_simd_fo* p_f,
                                     particle_simd_fo* p_i){
 
-    // Loop over all particles
     GPU_PARALLEL_LOOP_ALL_LEVELS
     for(int i = 0; i < p_f->n_mrk; i++) {
-        int index = p_f->index[i]; // Get the global index of the particle
-        if(p_i->running[i] == 0) continue; // Skip if the particle is not running
-        // Electric field at the particle position.
-        real Er_i, Ez_i, Ephi_i;
-        real Er_f, Ez_f, Ephi_f;
+        if(p_i->running[i] == 0) continue;
+        int index = p_f->index[i];
 
-        // Change in electric field at the particle position.
-        real dEr_i, dEz_i, dEphi_i;
-        real dEr_f, dEz_f, dEphi_f;
-
-        // Auxiliary variables for the particle.
-        real pert_field[14];
-
-        // Common values for the particle.
         real dt = p_f->time[i] - p_i->time[i];
-        real qm = p_i->charge[i] / p_i->mass[i]; // Charge/mass ratio
+        real charge = p_i->charge[i];
+        real mass = p_i->mass[i];
+        real w0 = p_i->weight[i];
+        real w1 = p_f->weight[i];
 
-        // Computing the Alfven velocity at the particle position.
+        /* Relativistic velocities from the momenta. */
+        real pnorm_f = sqrt(p_f->p_r[i] * p_f->p_r[i]
+                            + p_f->p_phi[i] * p_f->p_phi[i]
+                            + p_f->p_z[i] * p_f->p_z[i]);
+        real pnorm_i = sqrt(p_i->p_r[i] * p_i->p_r[i]
+                            + p_i->p_phi[i] * p_i->p_phi[i]
+                            + p_i->p_z[i] * p_i->p_z[i]);
+        real ginv_f = 1.0 / (physlib_gamma_pnorm(mass, pnorm_f) * mass);
+        real ginv_i = 1.0 / (physlib_gamma_pnorm(mass, pnorm_i) * mass);
+        real v_f[3] = {p_f->p_r[i] * ginv_f, p_f->p_phi[i] * ginv_f,
+                       p_f->p_z[i] * ginv_f};
+        real v_i[3] = {p_i->p_r[i] * ginv_i, p_i->p_phi[i] * ginv_i,
+                       p_i->p_z[i] * ginv_i};
+
+        /* mu0 vA^2 = B^2 / (n_i m_i) at both endpoints. */
         real iondens_f, iondens_i;
-        plasma_eval_dens(&iondens_f, p_f->rho[i], 
+        plasma_eval_dens(&iondens_f, p_f->rho[i],
             p_f->r[i], p_f->phi[i], p_f->z[i], p_f->time[i], 1, data->plasma_data);
-        plasma_eval_dens(&iondens_i, p_i->rho[i], 
+        plasma_eval_dens(&iondens_i, p_i->rho[i],
             p_i->r[i], p_i->phi[i], p_i->z[i], p_i->time[i], 1, data->plasma_data);
-
-        // Evaluating the magnetic field strenght at the particle position.
         real B[3];
-        real Babs2_f, Babs2_i;
         B_field_eval_B(B, p_f->r[i], p_f->phi[i], p_f->z[i], p_f->time[i], data->B_data);
-        Babs2_f = B[0] * B[0] + B[1] * B[1] + B[2] * B[2];
-        B_field_eval_B(B, p_i->r[i], p_i->phi[i], p_i->z[i], p_f->time[i], data->B_data);
-        Babs2_i = B[0] * B[0] + B[1] * B[1] + B[2] * B[2];
+        real vA2_f = (B[0] * B[0] + B[1] * B[1] + B[2] * B[2])
+                   / (iondens_f * data->thrmass);
+        B_field_eval_B(B, p_i->r[i], p_i->phi[i], p_i->z[i], p_i->time[i], data->B_data);
+        real vA2_i = (B[0] * B[0] + B[1] * B[1] + B[2] * B[2])
+                   / (iondens_i * data->thrmass);
 
-        // Evaluating the Alfven velocity at the particle position.
-        real vA2_f = Babs2_f / (iondens_f * data->thrmass);
-        real vA2_i = Babs2_i / (iondens_i * data->thrmass);
-        
         for (int j = 0; j < data->n_modes; j++) {
-            if( data->is_mode_evol[j] == 0 ) continue; // Skip if no evolution for this mode
-            
-            // Evaluate perturbations at final position
-            mhd_stat_eval_perturbations_dt(pert_field, p_f->r[i], p_f->phi[i], 
-                p_f->z[i], p_f->time[i], 1, j, data->boozerdata, 
-                data->mhd_data, data->B_data);
-            Er_f = pert_field[3];
-            Ephi_f = pert_field[4];
-            Ez_f = pert_field[5];
-            dEr_f = pert_field[10];
-            dEphi_f = pert_field[11];
-            dEz_f = pert_field[12];
-
-            // Use cached initial field values if available (from previous step's final values)
-            // Cache index: [mode * nprt * 6 + particle_index * 6 + field_component]
-            int cache_idx = j * data->nprt * 6 + index * 6;
-            // Check if we have valid cached values (use a sentinel check: if first component is non-zero
-            // or if any component is non-zero, assume cache is valid. Zero fields are possible but rare.)
-            // More robust: check if time has advanced (particle moved) - if cached, use it
-            real cached_Er = data->cached_fields_i[cache_idx];
-            // Use cached values if they exist (non-zero check is heuristic - zero fields are rare)
-            // In practice, after first step, cache will contain previous final values
-            if (cached_Er != 0.0 || data->cached_fields_i[cache_idx + 1] != 0.0 || 
-                data->cached_fields_i[cache_idx + 2] != 0.0) {
-                // Use cached values from previous step's final position
-                Er_i = cached_Er;
-                Ephi_i = data->cached_fields_i[cache_idx + 1];
-                Ez_i = data->cached_fields_i[cache_idx + 2];
-                dEr_i = data->cached_fields_i[cache_idx + 3];
-                dEphi_i = data->cached_fields_i[cache_idx + 4];
-                dEz_i = data->cached_fields_i[cache_idx + 5];
-            } else {
-                // First evaluation for this particle - compute initial position fields
-                mhd_stat_eval_perturbations_dt(pert_field, p_i->r[i], p_i->phi[i], 
-                    p_i->z[i], p_i->time[i], 1, j, data->boozerdata, 
-                    data->mhd_data, data->B_data);
-                Er_i = pert_field[3];
-                Ephi_i = pert_field[4];
-                Ez_i = pert_field[5];
-                dEr_i = pert_field[10];
-                dEphi_i = pert_field[11];
-                dEz_i = pert_field[12];
-            }
-            
-            // Cache final position values for next step (they become initial for next iteration)
-            // This reduces field evaluations by ~2x after the first step
-            data->cached_fields_i[cache_idx] = Er_f;
-            data->cached_fields_i[cache_idx + 1] = Ephi_f;
-            data->cached_fields_i[cache_idx + 2] = Ez_f;
-            data->cached_fields_i[cache_idx + 3] = dEr_f;
-            data->cached_fields_i[cache_idx + 4] = dEphi_f;
-            data->cached_fields_i[cache_idx + 5] = dEz_f;
-            
-            real Edotv_f = Er_f * p_f->p_r[i] + Ephi_f * p_f->p_phi[i] + Ez_f * p_f->p_z[i];
-            real Edotv_i = Er_i * p_i->p_r[i] + Ephi_i * p_i->p_phi[i] + Ez_i * p_i->p_z[i];
-            real dEdotv_f = dEr_f * p_f->p_r[i] + dEphi_f * p_f->p_phi[i] + dEz_f * p_f->p_z[i];
-            real dEdotv_i = dEr_i * p_i->p_r[i] + dEphi_i * p_i->p_phi[i] + dEz_i * p_i->p_z[i];
-            
-            // 1. Calculating the energy change for the particle.
-            real deltaE = 0.5 * Edotv_f + 0.5 * Edotv_i;
-            deltaE *= (p_f->time[i] - p_i->time[i]) * qm;
-            data->dEnergy[j * data->nprt + i] += deltaE;
-
-            // 2.3. Computing the source term S1.
+            if( data->is_mode_evol[j] == 0 ) continue;
+            real amplitude = data->mhd_data->amplitude_nm[j];
             real omega = data->mhd_data->omega_nm[j];
-            real factor1 = dt * qm / (2.0 * omega * omega);
-            data->S1[j * data->nprt + index] += 0.5 * (vA2_f * Edotv_f * p_f->weight[i] + \
-                                                       vA2_i * Edotv_i * p_i->weight[i] ) * factor1;
-            // 2.4. Computing the source term S2.
-            real factor2 = factor1 / omega;
-            data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * p_f->weight[i] + \
-                                                       vA2_i * dEdotv_i * p_i->weight[i] ) * factor2;
+            if( amplitude == 0.0 ) continue; /* no unit field to recover */
+
+            /* A failed evaluation (e.g. outside the B or Boozer domain)
+             * counts as zero field, as it does for the pusher. */
+            real pert[14];
+            real E_f[3], dE_f[3], E_i[3], dE_i[3];
+            if(mhd_stat_eval_perturbations_dt(pert, p_f->r[i], p_f->phi[i],
+                   p_f->z[i], p_f->time[i], 1, j, data->boozerdata,
+                   data->mhd_data, data->B_data)) {
+                for(int k = 0; k < 14; k++) pert[k] = 0.0;
+            }
+            for(int k = 0; k < 3; k++) {
+                E_f[k] = pert[3 + k];
+                dE_f[k] = pert[10 + k];
+            }
+
+            /* Start point: the cached end point of the previous step if it
+             * is this step's start time, otherwise a fresh evaluation. */
+            real* cache = data->cached_fields_i == NULL ? NULL
+                : &data->cached_fields_i[((size_t)j * (size_t)data->nprt
+                                          + (size_t)index) * FO_CACHE_STRIDE];
+            if(cache != NULL && cache[FO_CACHE_TIME] == p_i->time[i]) {
+                for(int k = 0; k < 3; k++) {
+                    E_i[k] = cache[k];
+                    dE_i[k] = cache[3 + k];
+                }
+            }
+            else {
+                if(mhd_stat_eval_perturbations_dt(pert, p_i->r[i], p_i->phi[i],
+                       p_i->z[i], p_i->time[i], 1, j, data->boozerdata,
+                       data->mhd_data, data->B_data)) {
+                    for(int k = 0; k < 14; k++) pert[k] = 0.0;
+                }
+                for(int k = 0; k < 3; k++) {
+                    E_i[k] = pert[3 + k];
+                    dE_i[k] = pert[10 + k];
+                }
+            }
+            if(cache != NULL) {
+                for(int k = 0; k < 3; k++) {
+                    cache[k] = E_f[k];
+                    cache[3 + k] = dE_f[k];
+                }
+                cache[FO_CACHE_TIME] = p_f->time[i];
+            }
+
+            real Edotv_f = E_f[0] * v_f[0] + E_f[1] * v_f[1] + E_f[2] * v_f[2];
+            real Edotv_i = E_i[0] * v_i[0] + E_i[1] * v_i[1] + E_i[2] * v_i[2];
+            real dEdotv_f = dE_f[0] * v_f[0] + dE_f[1] * v_f[1] + dE_f[2] * v_f[2];
+            real dEdotv_i = dE_i[0] * v_i[0] + dE_i[1] * v_i[1] + dE_i[2] * v_i[2];
+
+            /* 1. Work done by the mode (physical amplitude). */
+            data->dEnergy[j * data->nprt + index] +=
+                0.5 * charge * (Edotv_f + Edotv_i) * dt;
+
+            /* 2. Unit-amplitude in-phase and quadrature powers. */
+            real scale = charge / amplitude;
+            real P_f = scale * Edotv_f;
+            real P_i = scale * Edotv_i;
+            real Q_f = -scale * dEdotv_f / omega;
+            real Q_i = -scale * dEdotv_i / omega;
+            data->S1[j * data->nprt + index] +=
+                0.5 * (vA2_f * P_f * w1 + vA2_i * P_i * w0) * dt;
+            data->S2[j * data->nprt + index] +=
+                0.5 * (vA2_f * Q_f * w1 + vA2_i * Q_i * w0) * dt;
         }
     }
 
@@ -385,7 +409,6 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
 
         // Common values for the particle.
         real dt = p_f->time[i] - p_i->time[i];
-        real qm = p_i->charge[i] / p_i->mass[i]; // Charge/mass ratio
         real w0 = p_i->weight[i];
         real w1 = p_f->weight[i];
 
@@ -460,13 +483,14 @@ void diag_energy_exchange_update_gc(diag_energy_exchange_data* data,
             data->S1[j * data->nprt + index] += 0.5 * (vA2_f * coupling_f * w1 + \
                                                        vA2_i * coupling_i * w0) * dt;
 
-            // 3. Preserve the existing amplitude-scaled source term S2.
-            real dEdotv_f = - amplitude * charge * omega * omega * cosmhd_f
+            // 3. Unit-amplitude quadrature power: the same mode advanced by
+            //    a quarter period, i.e. cos(chi) in place of sin(chi).
+            real quad_f = - charge * omega * cosmhd_f
                 * (vpar_f * alpha0_f * Babs_f - phipot0_f);
-            real dEdotv_i = - amplitude * charge * omega * omega * cosmhd_i
+            real quad_i = - charge * omega * cosmhd_i
                 * (vpar_i * alpha0_i * Babs_i - phipot0_i);
-            data->S2[j * data->nprt + index] += 0.5 * (vA2_f * dEdotv_f * w1  + \
-                                                       vA2_i * dEdotv_i * w0) * dt;
+            data->S2[j * data->nprt + index] += 0.5 * (vA2_f * quad_f * w1 + \
+                                                       vA2_i * quad_i * w0) * dt;
         }
     }
 }
@@ -504,12 +528,11 @@ void diag_energy_exchange_compact(diag_energy_exchange_data* data,
     }
     
     // If clear is true, we reset the source terms to zero.
-    // Also clear cached fields when resetting (they'll be recomputed on next step)
     if (clear) {
         memset(data->S1, 0, data->n_modes * data->nprt * sizeof(real));
         memset(data->S2, 0, data->n_modes * data->nprt * sizeof(real));
         memset(data->dEnergy, 0, data->n_modes * data->nprt * sizeof(real));
-        memset(data->cached_fields_i, 0, data->n_modes * data->nprt * 6 * sizeof(real));
+        fo_cache_reset(data);
     }
 
 }
@@ -529,8 +552,11 @@ void diag_energy_exchange_update_nprt(diag_energy_exchange_data* data,
     // Removing the data from the GPU.
     GPU_MAP_DELETE_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                           data->S2[0: data->n_modes * data->nprt], 
-                          data->dEnergy[0: data->n_modes * data->nprt],
-                          data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
+                          data->dEnergy[0: data->n_modes * data->nprt]);
+    if(data->cached_fields_i != NULL) {
+        GPU_MAP_DELETE_DEVICE(
+            data->cached_fields_i[0: data->n_modes * data->nprt * FO_CACHE_STRIDE]);
+    }
 
     // Free the previous source terms and reallocate for the new number of particles
     free(data->S1);
@@ -542,16 +568,18 @@ void diag_energy_exchange_update_nprt(diag_energy_exchange_data* data,
     data->S1 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->S2 = (real*)malloc(data->n_modes * nprt * sizeof(real));
     data->dEnergy = (real*)malloc(data->n_modes * nprt * sizeof(real));
-    data->cached_fields_i = (real*)malloc(data->n_modes * nprt * 6 * sizeof(real));
-    
+    fo_cache_allocate(data);
+
     memset(data->S1, 0, data->n_modes * nprt * sizeof(real));
     memset(data->S2, 0, data->n_modes * nprt * sizeof(real));
     memset(data->dEnergy, 0, data->n_modes * nprt * sizeof(real));
-    memset(data->cached_fields_i, 0, data->n_modes * nprt * 6 * sizeof(real));
 
     // Offloading the data to the GPU again.
     GPU_MAP_TO_DEVICE(data->S1[0: data->n_modes * data->nprt], 
                       data->S2[0: data->n_modes * data->nprt], 
-                      data->dEnergy[0: data->n_modes * data->nprt],
-                      data->cached_fields_i[0: data->n_modes * data->nprt * 6]);
+                      data->dEnergy[0: data->n_modes * data->nprt]);
+    if(data->cached_fields_i != NULL) {
+        GPU_MAP_TO_DEVICE(
+            data->cached_fields_i[0: data->n_modes * data->nprt * FO_CACHE_STRIDE]);
+    }
 }

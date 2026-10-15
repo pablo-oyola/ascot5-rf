@@ -370,12 +370,18 @@ a5err mhd_stat_eval_perturbations_dt(real pert_field[14], real r, real phi, real
     real gradphipot_dt[3];
     real phipot, phipot_dt;
     real alpha, alpha_dt, alpha_dt2;
-    int isinside;
+    int isinside = 0;
+    /* Zero-initialised: outside the Boozer domain neither the angles nor rho
+     * are evaluated, and the mode must then contribute nothing (as in
+     * mhd_stat_eval), not values interpolated at an undefined radius. */
+    for(int i = 0; i < 12; i++) {
+        ptz[i] = 0.0;
+    }
     if(!err) {
         err = boozer_eval_psithetazeta(ptz, &isinside, r, phi, z, Bdata,
                                        boozerdata);
     }
-    real rho[2];
+    real rho[2] = {0.0, 0.0};
     if(!err && isinside) {
         err = B_field_eval_rho(rho, ptz[0], Bdata);
     }
@@ -388,11 +394,13 @@ a5err mhd_stat_eval_perturbations_dt(real pert_field[14], real r, real phi, real
     /* Get interpolated values */
     real a_da[3], phi_dphi[3];
     int interperr = 0;
-    interperr += interp1Dcomp_eval_df(a_da, &(mhddata->alpha_nm[includemode]),
-                                        rho[0]);
-    interperr += interp1Dcomp_eval_df(phi_dphi, &(mhddata->phi_nm[includemode]),
-                                        rho[0]);
-    if(interperr) {
+    if(!err && isinside) {
+        interperr += interp1Dcomp_eval_df(a_da, &(mhddata->alpha_nm[includemode]),
+                                            rho[0]);
+        interperr += interp1Dcomp_eval_df(phi_dphi, &(mhddata->phi_nm[includemode]),
+                                            rho[0]);
+    }
+    if(err || !isinside || interperr) {
         a_da[0] = 0;
         a_da[1] = 0;
         a_da[2] = 0;

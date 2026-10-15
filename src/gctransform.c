@@ -259,22 +259,19 @@ void gctransform_particle2guidingcenter(
             ( tau + a1ddotgradb );
     }
 
-    /* This monster is Littlejohn's gyro gauge vector (nabla e1) dot e2 */
+    /* Littlejohn's gyro gauge vector R = (nabla e1) . e2 for the basis used
+     * in this file, e1 = (b x z)/|b x z| and e2 = b x e1, which gives
+     *     R_j = b_z (b_x d_j b_y - b_y d_j b_x) / (b_x^2 + b_y^2)
+     * with d_j b_i = nablabhat[3*j + i]. The previous expression had
+     * coefficients of the wrong order in (b_x^2 + b_y^2) and was not
+     * invariant under rotations about z, so the transformation depended on
+     * the toroidal angle even in an axisymmetric field. */
     real bx2by2 = bhat[0] * bhat[0] + bhat[1] * bhat[1];
-    real b1x = -bhat[0]*bhat[2]/bx2by2;
-    real b2x = -bhat[1]/(bx2by2*bx2by2);
-    real b1y = -bhat[1]*bhat[2]/bx2by2;
-    real b2y = -bhat[0]/(bx2by2*bx2by2);
     real Rvec[3];
-    Rvec[0] =
-        b1x * ( nablabhat[1] + b2x * ( nablabhat[0] + nablabhat[1] ) ) +
-        b1y * ( nablabhat[0] + b2y * ( nablabhat[0] + nablabhat[1] ) );
-    Rvec[1] =
-        b1x * ( nablabhat[4] + b2x * ( nablabhat[3] + nablabhat[4] ) ) +
-        b1y * ( nablabhat[3] + b2y * ( nablabhat[3] + nablabhat[4] ) );
-    Rvec[2] =
-        b1x * ( nablabhat[7] + b2x * ( nablabhat[6] + nablabhat[7] ) ) +
-        b1y * ( nablabhat[6] + b2y * ( nablabhat[6] + nablabhat[7] ) );
+    for(int j = 0; j < 3; j++) {
+        Rvec[j] = bhat[2] * ( bhat[0] * nablabhat[3*j + 1]
+                            - bhat[1] * nablabhat[3*j + 0] ) / bx2by2;
+    }
 
     temp[0] = gradB[0] + kappa[0] * ( ppar2 / mass ) / (2 * mu0);
     temp[1] = gradB[1] + kappa[1] * ( ppar2 / mass ) / (2 * mu0);
@@ -478,22 +475,19 @@ void gctransform_guidingcenter2particle(
     temp[1] = gradB[1] + kappa[1] * ppar2 / (2 * mass * mu);
     temp[2] = gradB[2] + kappa[2] * ppar2 / (2 * mass * mu);
 
-    /* This monster is Littlejohn's gyro gauge vector (nabla e1) dot e2 */
+    /* Littlejohn's gyro gauge vector R = (nabla e1) . e2 for the basis used
+     * in this file, e1 = (b x z)/|b x z| and e2 = b x e1, which gives
+     *     R_j = b_z (b_x d_j b_y - b_y d_j b_x) / (b_x^2 + b_y^2)
+     * with d_j b_i = nablabhat[3*j + i]. The previous expression had
+     * coefficients of the wrong order in (b_x^2 + b_y^2) and was not
+     * invariant under rotations about z, so the transformation depended on
+     * the toroidal angle even in an axisymmetric field. */
     real bx2by2 = bhat[0] * bhat[0] + bhat[1] * bhat[1];
-    real b1x = -bhat[0]*bhat[2]/bx2by2;
-    real b2x = -bhat[1]/(bx2by2*bx2by2);
-    real b1y = -bhat[1]*bhat[2]/bx2by2;
-    real b2y = -bhat[0]/(bx2by2*bx2by2);
     real Rvec[3];
-    Rvec[0] =
-        b1x * ( nablabhat[1] + b2x * ( nablabhat[0] + nablabhat[1] ) ) +
-        b1y * ( nablabhat[0] + b2y * ( nablabhat[0] + nablabhat[1] ) );
-    Rvec[1] =
-        b1x * ( nablabhat[4] + b2x * ( nablabhat[3] + nablabhat[4] ) ) +
-        b1y * ( nablabhat[3] + b2y * ( nablabhat[3] + nablabhat[4] ) );
-    Rvec[2] =
-        b1x * ( nablabhat[7] + b2x * ( nablabhat[6] + nablabhat[7] ) ) +
-        b1y * ( nablabhat[6] + b2y * ( nablabhat[6] + nablabhat[7] ) );
+    for(int j = 0; j < 3; j++) {
+        Rvec[j] = bhat[2] * ( bhat[0] * nablabhat[3*j + 1]
+                            - bhat[1] * nablabhat[3*j + 0] ) / bx2by2;
+    }
     real zeta1 = 0.0;
     if(charge != 0) {
         zeta1 = -rho0 * math_dot(rhohat, Rvec) +

@@ -22,8 +22,8 @@ extern "C" {
  * @brief energy exchange diagnostic data structure.
  */
 typedef struct {
-    real* S1;      /** Source term for mode evolution */
-    real* S2;      /** Source term for mode evolution */
+    real* S1;      /** sum w int mu0 vA^2 P dt, P = unit-amplitude in-phase power */
+    real* S2;      /** sum w int mu0 vA^2 Q dt, Q = unit-amplitude quadrature power */
     real* dEnergy; /** Change in nergy. */
     int* is_mode_evol; /** Whether to evolve the mode */
     int n_modes;   /** Number of modes. */
@@ -36,10 +36,10 @@ typedef struct {
     plasma_data* plasma_data; /** Plasma data for displacement */
     real thrmass; /** Mass of the thermal particle */
 
-    // Cached field values from previous step (for optimization)
-    // Stores Er, Ephi, Ez, dEr, dEphi, dEz for each particle and mode
-    // Shape: [n_modes * nprt * 6] - indexed as [j * nprt * 6 + i * 6 + field_idx]
-    real* cached_fields_i; /** Cached initial field values from previous step */
+    // Full-orbit field cache: per mode and marker, E and dE/dt at the end
+    // point of the last step and that point's time (7 values), indexed
+    // [(mode * nprt + marker) * 7 + k]. See diag_energy_exchange.c.
+    real* cached_fields_i;
 
     // Internal variables.
     int enabled;
