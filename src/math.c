@@ -433,7 +433,12 @@ int math_point_in_polygon(real r, real z, real* rv, real* zv, int n) {
         real z2 = zv[i+1] - z;
         real r1 = rv[i] - r;
         real r2 = rv[i+1] - r;
-        if(z1 * z2 < 0) {
+        /* Half-open crossing rule: a vertex at exactly the point's height is
+         * counted once, by the edge that leaves it upwards. The strict test
+         * z1*z2 < 0 skipped both edges, so every point level with a polygon
+         * vertex (e.g. the midplane of a boundary sampled from theta = 0)
+         * was classed as outside. */
+        if((z1 > 0) != (z2 > 0)) {
             real ri = r1 + (z1*(r2-r1)) / (z1-z2);
             if(ri > 0) {
                 hits++;
