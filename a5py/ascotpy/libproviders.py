@@ -792,17 +792,28 @@ class LibProviders():
 
     def _provide_MHD_STAT(self, **kwargs):
         """Initialize :class:`MHD_STAT` from dictionary.
+
+        The mode numbers are cast to C int and the real arrays to contiguous
+        float64 here: libascot reads the raw buffers, so an int64 ``nmodes``
+        would otherwise be read as alternating value / high-half pairs.
+        ``alpha`` and ``phi`` keep their raw mode-major buffers.
         """
+        nmodes = np.ascontiguousarray(kwargs["nmodes"], dtype=np.int32).ravel()
+        mmodes = np.ascontiguousarray(kwargs["mmodes"], dtype=np.int32).ravel()
+        real = {k: np.asarray(kwargs[k], dtype=np.float64)
+                for k in ("amplitude", "omega", "phase", "alpha", "phi")}
+        for k in ("amplitude", "omega", "phase"):
+            real[k] = np.ascontiguousarray(real[k]).ravel()
         _LIBASCOT.mhd_stat_init(
             ctypes.byref(self._sim.mhd_data.stat), int(kwargs["nmode"][0]),
             int(kwargs["nrho"][0]), kwargs["rhomin"][0], kwargs["rhomax"][0],
-            kwargs["nmodes"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
-            kwargs["mmodes"].ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
-            kwargs["amplitude"].ctypes.data_as(PTR_ARR),
-            kwargs["omega"].ctypes.data_as(PTR_ARR),
-            kwargs["phase"].ctypes.data_as(PTR_ARR),
-            kwargs["alpha"].ctypes.data_as(PTR_ARR),
-            kwargs["phi"].ctypes.data_as(PTR_ARR),
+            nmodes.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+            mmodes.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+            real["amplitude"].ctypes.data_as(PTR_ARR),
+            real["omega"].ctypes.data_as(PTR_ARR),
+            real["phase"].ctypes.data_as(PTR_ARR),
+            real["alpha"].ctypes.data_as(PTR_ARR),
+            real["phi"].ctypes.data_as(PTR_ARR),
             )
         self._sim.mhd_data.type = ascot2py.mhd_type_stat
 
