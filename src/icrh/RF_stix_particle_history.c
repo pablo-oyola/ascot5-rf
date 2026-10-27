@@ -15,16 +15,44 @@
  * @param ntor Array of toroidal mode numbers.
  * @param lhigh Flag indicating whether high-frequency data is used.
  */
+/**
+ * @brief Push the current marker state into the ring buffer used by the
+ *        windowed least-squares fit of nu(t) (RF2D_gc_stix_get_interaction_time).
+ */
+static void RF_particle_history_push(RF_particle_history* hist, particle_simd_gc* p,
+                                     int imrk, real h) {
+    real bnorm = sqrt(p->B_r[imrk] * p->B_r[imrk] +
+                      p->B_phi[imrk] * p->B_phi[imrk] +
+                      p->B_z[imrk] * p->B_z[imrk]);
+    hist->fit_tacc += h;
+    hist->fit_head = (hist->fit_head + 1) % RF_N_FIT;
+    hist->fit_t[hist->fit_head] = hist->fit_tacc;
+    hist->fit_vpar[hist->fit_head] = p->ppar[imrk] / p->mass[imrk];
+    hist->fit_kfac[hist->fit_head] = p->B_phi[imrk] / (p->r[imrk] * bnorm);
+    hist->fit_Om[hist->fit_head] = hist->qm * bnorm;
+    if(hist->fit_n < RF_N_FIT) hist->fit_n++;
+}
+
 void RF_particle_history_init(RF_particle_history* hist, particle_simd_gc* p, int nwaves, real h,
                               int imrk, real* omega, int* ntor, int lhigh) {
     hist->resn = (real*) malloc(nwaves * sizeof(real) * lhigh);
     hist->resp = (real*) malloc(nwaves * sizeof(real) * lhigh);
+    hist->last_kick_t = (real*) malloc(nwaves * sizeof(real) * lhigh);
+    hist->last_kick_dur = (real*) malloc(nwaves * sizeof(real) * lhigh);
+    for(int i = 0; i < nwaves * lhigh; i++) {
+        hist->last_kick_t[i] = -1e30;
+        hist->last_kick_dur[i] = 0.0;
+    }
+    hist->fit_n = 0;
+    hist->fit_head = -1;
+    hist->fit_tacc = 0.0;
 
     // The mass and the charge-over-mass ratio are set before the early return:
     // both are used by the interaction time and must never be left undefined.
     hist->mass = p->mass[imrk];
     hist->qm = p->charge[imrk] / p->mass[imrk]; // Charge/mass ratio
     if(!p->running[imrk]) return; // Particle is not running, skip.
+    RF_particle_history_push(hist, p, imrk, 0.0);
     
     // We need to add to the data the current values.
     for(int j = 0; j < RF_N_HISTORY; j++) {
@@ -133,6 +161,10 @@ void RF_particle_eval_nkicks(RF_particle_history* hist, particle_simd_gc* p,
 void RF_particle_history_free(RF_particle_history* hist) {
     if (hist->resn) free(hist->resn);
     if (hist->resp) free(hist->resp);
+    if (hist->last_kick_t) free(hist->last_kick_t);
+    if (hist->last_kick_dur) free(hist->last_kick_dur);
+    hist->last_kick_t = NULL;
+    hist->last_kick_dur = NULL;
     if (hist->omega) free(hist->omega);
     if (hist->ntor) free(hist->ntor);
 
@@ -167,4 +199,5 @@ void RF_particle_history_update(RF_particle_history* hist, particle_simd_gc* p, 
     hist->bphi[0] = p->B_phi[imrk];
     hist->R[0] = p->r[imrk];
     hist->rhopara[0] = p->ppar[imrk] / hist->bnorm[0];
+    RF_particle_history_push(hist, p, imrk, h);
 }

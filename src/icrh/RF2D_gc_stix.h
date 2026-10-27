@@ -52,6 +52,12 @@ typedef struct RF2D_gc_stix{
     int include_vpara_kick;   /** Flag to include vpara kick in the Stix operator */
     int include_phase_factor; /** Flag to include phase factor in the Stix operator */
 
+    // Operator numerics (optional HDF5 datasets `fit_window`, `kick_refractory`).
+    real fit_window;      /** Window [s] of past history points for the least-squares
+                              nu(t) fit giving nudot and nudot2 (<= 0: 3-point differences) */
+    real kick_refractory; /** No second kick on the same (wave, harmonic) within
+                              kick_refractory * sqrt(t_inter) of the last one (<= 0: off) */
+
     // Internal flags.
     int enabled; /** Flag to check if the object has been initialized */
     

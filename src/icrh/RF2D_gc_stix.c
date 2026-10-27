@@ -188,6 +188,17 @@ a5err RF2D_gc_stix_init_from_file(RF2D_gc_stix* stix_data, hid_t f, char* qid,
 
     // Set the B_field_data pointer.
     stix_data->bdata = bdata;
+
+    // Operator numerics (optional; defaults set in RF2D_gc_stix_init).
+    real tmpval;
+    if( !hdf5_read_double(RFPATHSTIX "fit_window", &tmpval, f, qid, __FILE__, __LINE__) ) {
+        stix_data->fit_window = tmpval;
+    }
+    if( !hdf5_read_double(RFPATHSTIX "kick_refractory", &tmpval, f, qid, __FILE__, __LINE__) ) {
+        stix_data->kick_refractory = tmpval;
+    }
+    print_out(VERBOSE_IO, "RF2D_gc_stix: fit_window = %g s, kick_refractory = %g\n",
+              stix_data->fit_window, stix_data->kick_refractory);
     err = 0;
     return err;
 }
@@ -260,6 +271,8 @@ a5err RF2D_gc_stix_init(RF2D_gc_stix* stix_data,
     stix_data->nr = nr;
     stix_data->nz = nz;
     stix_data->nwaves = nwaves;
+    stix_data->fit_window = 3.0e-7;   // defaults; RF2D_gc_stix_init_from_file may override
+    stix_data->kick_refractory = 1.0;
     stix_data->include_Eminus = include_Eminus;
     stix_data->include_stochastic = include_stochastic;
     stix_data->include_vpara_kick = include_vpara_kick;
@@ -610,6 +623,68 @@ a5err RF2D_gc_stix_compute_cold_resonances(RF2D_gc_stix* stix_data,
 }
 
 /**
+ * @brief Least-squares parabola through the history points of the last
+ *        stix_data->fit_window seconds, giving nudot and nudot2 at the crossing.
+ *
+ * y(u) = c0 + c1 u + c2 u^2 with u = (t - t_now)/W in [-1, 0] and
+ * y = nu - omega, nu = k_par v_par + l Omega. nudot is evaluated at the root
+ * of y nearest u = 0 (the crossing), nudot2 = 2 c2 / W^2. The 3-point second
+ * difference of the post-collision history is dominated by collisional noise
+ * (~dt^(-3/2)) at ~10 ns steps; the window fit's noise is set by W instead.
+ *
+ * @return 1 when at least three points fell in the window, 0 otherwise.
+ */
+static int RF2D_gc_stix_fit_derivs(RF2D_gc_stix* stix_data, RF_particle_history* hist,
+                                   int iwave, int l, real* nudot_out, real* nudot2_out) {
+    const real W = stix_data->fit_window;
+    if(W <= 0.0 || hist->fit_n < 3) return 0;
+    real t_now = hist->fit_t[hist->fit_head];
+    real s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, y0 = 0, y1 = 0, y2 = 0, umin = 0;
+    int n = 0;
+    for(int i = 0; i < hist->fit_n; i++) {
+        int idx = (hist->fit_head - i + RF_N_FIT) % RF_N_FIT;
+        real tau = hist->fit_t[idx] - t_now;
+        if(tau < -W) break;
+        real u = tau / W, u2 = u * u;
+        real nu = -stix_data->ntor[iwave] * hist->fit_kfac[idx] * hist->fit_vpar[idx]
+                  + l * hist->fit_Om[idx];
+        real y = nu - stix_data->omega[iwave];
+        s0 += 1.0; s1 += u; s2 += u2; s3 += u2 * u; s4 += u2 * u2;
+        y0 += y; y1 += y * u; y2 += y * u2;
+        n++;
+        if(u < umin) umin = u;
+    }
+    if(n < 3) return 0;
+    real a11 = s0, a12 = s1, a13 = s2, a22 = s2, a23 = s3, a33 = s4;
+    real det = a11 * (a22 * a33 - a23 * a23) - a12 * (a12 * a33 - a23 * a13)
+               + a13 * (a12 * a23 - a22 * a13);
+    if(det == 0.0) return 0;
+    real c0 = (y0 * (a22 * a33 - a23 * a23) - a12 * (y1 * a33 - a23 * y2)
+               + a13 * (y1 * a23 - a22 * y2)) / det;
+    real c1 = (a11 * (y1 * a33 - a23 * y2) - y0 * (a12 * a33 - a23 * a13)
+               + a13 * (a12 * y2 - y1 * a13)) / det;
+    real c2 = (a11 * (a22 * y2 - y1 * a23) - a12 * (a12 * y2 - y1 * a13)
+               + y0 * (a12 * a23 - a22 * a13)) / det;
+    real u0 = 0.0;
+    if(c2 != 0.0) {
+        real disc = c1 * c1 - 4.0 * c2 * c0;
+        if(disc >= 0.0) {
+            real sq = sqrt(disc);
+            real r1 = (-c1 + sq) / (2.0 * c2), r2 = (-c1 - sq) / (2.0 * c2);
+            int ok1 = (r1 <= 0.0 && r1 >= umin), ok2 = (r2 <= 0.0 && r2 >= umin);
+            if(ok1 && (!ok2 || fabs(r1) < fabs(r2))) u0 = r1;
+            else if(ok2) u0 = r2;
+        }
+    } else if(c1 != 0.0) {
+        real r = -c0 / c1;
+        if(r <= 0.0 && r >= umin) u0 = r;
+    }
+    *nudot_out = fmax(1e-14, fabs((c1 + 2.0 * c2 * u0) / W));
+    *nudot2_out = fmax(1e-14, fabs(2.0 * c2 / (W * W)));
+    return 1;
+}
+
+/**
  * @brief Computes the interaction time for a particle with the RF wave during resonance.
  * 
  * This function calculates the squared interaction time for a particle with the RF wave
@@ -659,7 +734,7 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     // 3. The derivatives \dot\nu and \ddot\nu are evaluated at t_0.
     // 4. The interaction time is computed.
     real a_coef = ( (nu_prev_prev - nu_prev) * hist->dt[curr]
-                   + (nu_curr      - nu_prev) * hist->dt[prev] )
+                   + (nu_curr     - nu_prev) * hist->dt[prev] )
                   / ( hist->dt[prev] * hist->dt[curr] * ddt );
     real b_coef = ( nu_curr - nu_prev_prev ) / ddt - a_coef * diff_dt;
     real nudot2 = 2.0 * a_coef; // \ddot\nu, constant along the parabola
@@ -673,19 +748,20 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
 #else
     real nudot = b_coef; // fallback: \dot\nu at t_prev (pre-review value)
     if (fabs(a_coef) > 1e-14) {
-        // Solve a*tau^2 + b*tau + c = 0 (c = nu_prev) for the root nearest
+        // Solve a*tau^2 + b*tau + c = 0 (c = nu_prev - omega) for the root nearest
         // tau = 0 that also falls inside the sampled bracket
         // [-hist->dt[prev], hist->dt[curr]]; that is the physical crossing
         // t_0, the other root of the parabola is spurious. A negative
         // discriminant means the local parabola does not actually recross
         // zero (e.g. noisy or poorly-resolved history) and we keep the
         // t_prev fallback above rather than propagate a NaN.
-        real disc = b_coef * b_coef - 4.0 * a_coef * nu_prev;
+        real c_coef = nu_prev - stix_data->omega[iwave]; // the crossing is nu = omega
+        real disc = b_coef * b_coef - 4.0 * a_coef * c_coef;
         if (disc >= 0.0) {
             real sq = sqrt(disc);
             real q = -0.5 * ( b_coef + copysign(sq, b_coef) );
             real tau_a = (fabs(q) > 1e-300) ? q / a_coef : 0.0;
-            real tau_b = (fabs(q) > 1e-300) ? nu_prev / q : tau_a;
+            real tau_b = (fabs(q) > 1e-300) ? c_coef / q : tau_a;
             int a_in = (tau_a >= -hist->dt[prev] && tau_a <= hist->dt[curr]);
             int b_in = (tau_b >= -hist->dt[prev] && tau_b <= hist->dt[curr]);
             real tau0 = tau_a;
@@ -698,22 +774,36 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
     nudot = fmax(1e-14, fabs(nudot)); // Avoiding zero nudot
     nudot2 = fmax(1e-14, fabs(nudot2)); // Avoiding zero nudot2
 
+    // Windowed least-squares derivatives replace the 3-point ones whenever at
+    // least three history points fall in stix_data->fit_window (see above).
+    {
+        real fnd, fnd2;
+        if(RF2D_gc_stix_fit_derivs(stix_data, hist, iwave, l, &fnd, &fnd2)) {
+            nudot = fnd;
+            nudot2 = fnd2;
+        }
+    }
+
     // The two expressions below are the two limits of the same oscillating
     // integral: the stationary-phase one, valid when the particle crosses the
     // resonance transversally, and the Airy one, valid when the crossing is
     // tangential and the two stationary points coalesce.
     //
-    // Normalisation. The squared interaction time is |I|^2 with
-    // I = int exp(i Phi(t)) dt the phase integral over one crossing; the kick
-    // in RF2D_gc_stix_scatter is (q v_perp E_c J)^2 |I|^2 <cos^2> with E_c the
-    // physical circular amplitude (Eplus_2 = 2|E+|^2 and the 1/4 there only
-    // convert the Brambilla/TORIC unitary E+ = (E_psi + i E_eta)/sqrt2 into
-    // |Ex + i Ey|^2 and back to E_c^2). The stationary-phase value of |I|^2
-    // for an isolated transverse crossing is 2 pi/|nudot|
-    // The Airy integral is |I|^2 for the coherent pair of crossings of one
-    // tangential passage (entry and exit); its large-|zeta| mean-square is
-    // 2 x (2 pi/|nudot|), so per crossing it carries the factor 0.5 below
-    // (the same full-orbit runs give 0.83-1.05 x that value at |zeta| < 1.2).
+    // Normalisation. With I = int exp(i Phi(t)) dt the phase integral over a
+    // crossing, the gyro-averaged drift is dmu = q^2 E_c^2 J^2 |I|^2 / (2 m B),
+    // E_c = |Ex + i Ey| / 2 the rotating-field amplitude. The kick in
+    // RF2D_gc_stix_scatter is scaling2 * term1 * t_inter / (4 B m) with
+    // term1 = 2|E+|^2 J^2 = |Ex + i Ey|^2 J^2 = 4 E_c^2 J^2 (the 1/4 undoes that
+    // factor; the 1/2 of mu = m v_perp^2 / 2B is NOT in the prefactor), so the
+    // value returned here is t_inter = |I|^2 / 2:
+    //   transverse crossing (stationary phase, |I|^2 = 2 pi/|nudot|): pi/|nudot|,
+    //   tangential passage (Airy, |I_pair|^2 = tau_c^2 for the coalesced entry/exit
+    //   pair): 0.5 tau_c^2, applied once per passage (see kick_refractory in
+    //   RF2D_gc_stix_scatter). Its large-|zeta| mean is twice the single-crossing
+    //   value, as it must be for two incoherent crossings.
+    // The same chain in ORBIT-RF (scatrf: pi/|wdot|, code units) agrees with
+    // this to 0.04 %; the earlier 2 pi/|nudot| doubled the drift and, through
+    // dmu_stoch, the diffusion (AUG #40412 GC vs FO, Oct 2026).
     //
     // Switch. Written in units of (2/|nudot2|)^(2/3), the two branches are
     // 2 pi^2 Ai(zeta)^2 and pi |zeta|^(-1/2); they are equal where
@@ -736,7 +826,7 @@ real RF2D_gc_stix_get_interaction_time(RF2D_gc_stix* stix_data,
 
     // Squared interaction time
     if (fabs(zeta) > zeta_switch) {
-        time = 2.0 * M_PI / fabs(nudot);
+        time = M_PI / fabs(nudot);
     } else {
         real airy_val = gsl_sf_airy_Ai(zeta, GSL_PREC_DOUBLE);
         time = 2.0 * M_PI * airy_val / pow(fabs(nudot2 / 2.0), 1.0/3.0);
@@ -830,6 +920,19 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
             real t_inter = RF2D_gc_stix_get_interaction_time(stix, &hist[imrk], iwave, lres);
             if(t_inter < 0.0 || !isfinite(t_inter)) continue; // No interaction time, go to the next wave.
 
+            // One quasilinear kick per crossing: the kick itself (drhopara and the
+            // stochastic dmu) can push nu back through omega within the same
+            // passage, which fires further kicks; skip sign changes closer than
+            // kick_refractory * sqrt(t_inter) to the last kick on this harmonic.
+            if(stix->kick_refractory > 0.0) {
+                int kidx = iwave * hist[imrk].lhigh + (lres - 1);
+                real tnow = hist[imrk].fit_tacc;
+                if(tnow - hist[imrk].last_kick_t[kidx]
+                   < stix->kick_refractory * hist[imrk].last_kick_dur[kidx]) continue;
+                hist[imrk].last_kick_t[kidx] = tnow;
+                hist[imrk].last_kick_dur[kidx] = sqrt(t_inter);
+            }
+
             RF2D_gc_stix_eval_fields(p->r[imrk], p->phi[imrk], p->z[imrk], p->time[imrk],
                                      stix, &Eplus_2, &Eminus_2, &E2cross, &kperp);
             if(kperp == 0.0) continue; // Outside domain.
@@ -888,7 +991,10 @@ void RF2D_gc_stix_scatter(RF2D_gc_stix* stix, RF_particle_history* hist,
                 // scaled by the mass of the particle. We temporarily remove the charge.
                 dmu /= p->charge[imrk];
                 real tmp_mu = p->mu[imrk] / p->charge[imrk];
-                real dmu_stoch = sqrt(fabs(2 * tmp_mu * term1 / (term1 + term2) * dmu)) * irnd;
+                real dmu_stoch = 0.0;
+                if(term1 + term2 != 0.0) {
+                    dmu_stoch = sqrt(fabs(2 * tmp_mu * term1 / (term1 + term2) * dmu)) * irnd;
+                }
                 imrk_rnd_idx++; // For next fetch.
                 real drhopara_stoch = kpara / (lres * omega_cycl) * dmu_stoch;
 

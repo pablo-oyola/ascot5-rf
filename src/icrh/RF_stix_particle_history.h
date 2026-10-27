@@ -10,6 +10,7 @@
 
 
 #define RF_N_HISTORY 3 // Number of history points for the RF particle history
+#define RF_N_FIT 128   // Ring-buffer length for the windowed nu(t) fit
 
 typedef struct RF_particle_history{
     real dt[RF_N_HISTORY];    /** Particle history: time step*/
@@ -17,6 +18,15 @@ typedef struct RF_particle_history{
     real bphi[RF_N_HISTORY];  /** Particle history: toroidal magnetic field */
     real rhopara[RF_N_HISTORY];  /** Particle history: parallel momentum */
     real R[RF_N_HISTORY];  /** Particle history: radial coordinate */
+    real fit_t[RF_N_FIT];    /** Windowed fit: accumulated time of each stored point */
+    real fit_vpar[RF_N_FIT]; /** Windowed fit: v_par */
+    real fit_kfac[RF_N_FIT]; /** Windowed fit: B_phi / (R |B|), k_par = -n_tor * kfac */
+    real fit_Om[RF_N_FIT];   /** Windowed fit: q |B| / m */
+    int fit_n;               /** Windowed fit: number of valid points */
+    int fit_head;            /** Windowed fit: ring index of the newest point */
+    real fit_tacc;           /** Accumulated time since the history was initialised */
+    real* last_kick_t;       /** Refractory: time of the last kick per (wave, harmonic) */
+    real* last_kick_dur;     /** Refractory: sqrt(t_inter) of the last kick per (wave, harmonic) */
     real *resn;  /** Resonance locations for the Stix diffusion operator ( - kpara * vpara + omega / ntor)*/
     real *resp;  /** Resonance locations for the Stix diffusion operator ( - kpara * vpara + omega / ntor) */
     int nwaves; /** Number of waves in the Stix diffusion operator */

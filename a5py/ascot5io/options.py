@@ -927,7 +927,16 @@ class Opt(DataGroup):
                     except Exception:
                         out[key] = val
                 else:
-                    out[key] = type(defopt[key])(val.item())
+                    value = val.item()
+                    deftype = type(defopt[key])
+                    # An integer default does not mean the stored value is an
+                    # integer (e.g. DIST_MIN_CHARGE = 0.5, DIST_MAX_CHARGE = 1.5
+                    # bracket a single charge state); casting would silently
+                    # turn them into 0 and 1 and empty the 5D distribution.
+                    if deftype is int and not float(value).is_integer():
+                        out[key] = float(value)
+                    else:
+                        out[key] = deftype(value)
 
         for o in defopt.keys():
             if o not in out:

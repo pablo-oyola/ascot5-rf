@@ -388,6 +388,7 @@ class RF2D_Stix(DataGroup):
                    costheta: float=None, sintheta: float=None,
                    include_Eminus: bool=True, include_stochastic: bool=True,
                    include_vpara_kick: bool=True, include_phase_factor: bool=True,
+                   fit_window: float=3.0e-7, kick_refractory: float=1.0,
                    desc=None):
         """Write input data to the HDF5 file.
 
@@ -504,6 +505,13 @@ class RF2D_Stix(DataGroup):
             g.create_dataset("include_stochastic", (1,), data=(include_stochastic,), dtype="i4")
             g.create_dataset("include_vpara_kick", (1,), data=(include_vpara_kick,), dtype="i4")
             g.create_dataset("include_phase_factor", (1,), data=(include_phase_factor,), dtype="i4")
+
+            # Operator numerics: window [s] of the least-squares nu(t) fit for the
+            # resonance derivatives (<= 0: 3-point differences) and the refractory
+            # multiplier of sqrt(t_inter) forbidding a second kick on the same
+            # harmonic within one crossing (<= 0: off).
+            g.create_dataset("fit_window", (1,), data=(float(np.asarray(fit_window).ravel()[0]),), dtype="f8")
+            g.create_dataset("kick_refractory", (1,), data=(float(np.asarray(kick_refractory).ravel()[0]),), dtype="f8")
 
         return gname
     
